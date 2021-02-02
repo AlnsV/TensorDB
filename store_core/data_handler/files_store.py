@@ -24,44 +24,63 @@ class FilesStore:
             self.base_path = os.path.join(self.base_path, os.getenv("ENV_MODE"))
             self.files_settings = files_settings[os.getenv("ENV_MODE")]
 
-    def get_handler(self, name, **kwargs):
+        self.__dict__.update(**kwargs)
+
+    def get_handler(self, name, path, **kwargs):
         if name not in self.open_base_store:
-            if 'data_handler' in self.files_settings[name]:
-                self.open_base_store[name] = self.files_settings[name]['data_handler'](
-                    **self.files_settings[name], **kwargs
-                )
-            else:
-                self.open_base_store[name] = self.data_handler(**self.files_settings[name], **kwargs)
+            kwargs['path'] = self.complete_path(path, name)
+            self.open_base_store[name] = self.data_handler(**self.files_settings[name], **kwargs)
         return self.open_base_store[name]
 
-    def get_dataset(self, name: str, *args, **kwargs) -> xarray.Dataset:
+    def get_dataset(self, name: str, path: Union[str, List] = None, *args, **kwargs) -> xarray.Dataset:
         if 'get_dataset' in self.files_settings[name]:
             return getattr(self, self.files_settings[name]['get_dataset'])(*args, **kwargs)
 
-        dataset = self.get_handler(name, **kwargs).get_dataset()
-        return dataset
+        return self.get_handler(name, path=path, **kwargs).get_dataset()
 
-    def append_data(self, new_data: xarray.DataArray, name: str, *args, **kwargs):
+    def append_data(self,
+                    new_data: xarray.DataArray,
+                    name: str,
+                    path: Union[str, List] = None,
+                    *args,
+                    **kwargs):
+
         if 'append_data' in self.files_settings[name]:
-            getattr(self, self.files_settings[name]['append_data'])(new_data, *args, **kwargs)
-            return
+            return getattr(self, self.files_settings[name]['append_data'])(new_data, *args, **kwargs)
 
-        self.get_handler(name, **kwargs).append_data(new_data, *args, **kwargs)
+        self.get_handler(name, path=path, **kwargs).append_data(new_data, *args, **kwargs)
 
-    def update_data(self, new_data: xarray.DataArray, name: str, *args, **kwargs):
+    def update_data(self,
+                    new_data: xarray.DataArray,
+                    name: str,
+                    path: Union[str, List] = None,
+                    *args,
+                    **kwargs):
         if 'update_data' in self.files_settings[name]:
-            getattr(self, self.files_settings[name]['update_data'])(new_data, *args, **kwargs)
-            return
+            return getattr(self, self.files_settings[name]['update_data'])(new_data, *args, **kwargs)
 
-        self.get_handler(name, **kwargs).update_data(new_data, *args, **kwargs)
+        self.get_handler(name, path=path, **kwargs).update_data(new_data, *args, **kwargs)
 
-    def store_data(self, new_data, name, *args, **kwargs):
+    def store_data(self,
+                   new_data: xarray.DataArray,
+                   name: str,
+                   path: Union[str, List] = None,
+                   *args,
+                   **kwargs):
+
         if 'store_data' in self.files_settings[name]:
-            getattr(self, self.files_settings[name]['store_data'])(new_data, *args, **kwargs)
-            return
+            return getattr(self, self.files_settings[name]['store_data'])(new_data, *args, **kwargs)
 
-        kwargs['first_write'] = True
-        self.get_handler(name, **kwargs).store_data(new_data, *args, **kwargs)
+        self.get_handler(name, path=path, first_write=True, **kwargs).store_data(new_data, *args, **kwargs)
+
+    def complete_path(self, path: Union[str, List], name: str):
+        if path is None:
+            return os.path.join(self.base_path, self.files_settings[name].get('extra_path', ''), name)
+
+        if isinstance(path, list):
+            return os.path.join(self.base_path, self.files_settings[name].get('extra_path', ''), *path)
+
+        return os.path.join(self.base_path, self.files_settings[name].get('extra_path', ''), path)
 
     def close_store(self, name):
         if name in self.open_base_store:

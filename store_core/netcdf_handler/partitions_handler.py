@@ -15,16 +15,11 @@ from store_core.utils import modify_coord_dtype
 class PartitionsStore(BaseStore):
     def __init__(self,
                  path: str,
-                 dims: List[str],
-                 dims_type: Dict[str, str],
-                 dims_space: Dict[str, Union[float, int]] = None,
-                 default_free_value: Any = None,
-                 concat_dim: str = "index",
                  dims_conversion: Dict[str, str] = None,
                  default_value: Any = np.nan,
                  max_cached_data: int = 0,
                  first_write: bool = False,
-                 core_handler: Callable[[BaseCoreHandler], BaseCoreHandler] = None,
+                 core_handler: Union[Callable[[BaseCoreHandler], BaseCoreHandler], str] = None,
                  *args,
                  **kwargs):
 
@@ -32,16 +27,15 @@ class PartitionsStore(BaseStore):
 
         self.metadata = MetadataHandler(
             path=path,
-            first_write=first_write
+            first_write=first_write,
+            *args,
+            **kwargs
         )
 
         self.dims_handler = DimsHandler(
             coords={},
-            dims=dims,
-            dims_space=dims_space,
-            dims_type=dims_type,
-            default_free_value=default_free_value,
-            concat_dim=concat_dim
+            *args,
+            **kwargs
         )
 
         self.default_value = default_value
@@ -54,10 +48,18 @@ class PartitionsStore(BaseStore):
         self.core_handler = core_handler
         if self.core_handler is None:
             self.core_handler = CoreNetcdfHandler
+        elif isinstance(self.core_handler, str):
+            pass
+
         self.count_writes = 0
 
     @property
     def index(self):
+        if self.dims_conversion is not None:
+            return self.metadata.index.assign_coords({
+                name: modify_coord_dtype(coord.values, self.dims_conversion[name])
+                for name, coord in self.dataset.coords.items()
+            })
         return self.metadata.index
 
     @property
@@ -68,9 +70,23 @@ class PartitionsStore(BaseStore):
     def last_partition(self) -> BaseCoreHandler:
         if self._last_partition_name is None or self.metadata.get_last_partition_name() != self._last_partition_name:
             self._last_partition_name = self.metadata.get_last_partition_name()
-            self._last_partition = self.metadata.get_core_partition(self._last_partition_name)
+            self._last_partition = self.get_core_partition(self._last_partition_name)
 
         return self._last_partition
+
+    def get_core_partition(self, path: str, first_write: bool = False, *args, **kwargs) -> BaseCoreHandler:
+        return self.core_handler(
+            path=path,
+            dims=self.dims_handler.dims,
+            dims_space=self.dims_handler.dims_space,
+            dims_type=self.dims_handler.dims_type,
+            concat_dim=self.dims_handler.concat_dim,
+            default_value=self.default_value,
+            default_free_value=self.dims_handler.default_free_value,
+            first_write=first_write,
+            *args,
+            **kwargs
+        )
 
     def append_data(self, new_data: xarray.DataArray, force_write: bool = False, *args, **kwargs):
 
@@ -100,39 +116,36 @@ class PartitionsStore(BaseStore):
     def write_new_partition(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
 
-        new_partition = self.core_handler(
+        new_partition = self.get_core_partition(
             path=os.path.join(self.metadata.path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
-            dims=self.dims_handler.dims,
-            dims_space=self.dims_handler.dims_space,
-            dims_type=self.dims_handler.dims_type,
-            concat_dim=self.dims_handler.concat_dim,
-            default_value=self.default_value,
-            default_free_value=self.dims_handler.default_free_value,
             first_write=True,
             *args,
             **kwargs
         )
         new_partition.write_file(new_data)
-        self.metadata.concat_new_partition(new_data.coords[self.dims_handler.concat_dim].values, new_partition)
+        self.metadata.concat_new_partition(
+            new_partition.dims_handler.used_coords[self.dims_handler.concat_dim],
+            new_partition
+        )
 
-    def update_data(self, data: xarray.DataArray, *args, **kwargs):
+    def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
 
-        partitions_index_groups = data.groupby(self.index.sel(columns='partition_pos'))
+        partitions_index_groups = new_data.groupby(self.index.sel(columns='partition_pos'))
 
         for partition_pos, act_data in partitions_index_groups:
             partition_name = self.partition_names.values[partition_pos, 0]
-            partition = self.metadata.get_core_partition(partition_name)
+            partition = self.get_core_partition(partition_name, *args, **kwargs)
             partition.update_data(act_data)
 
-    def store_data(self, data: xarray.DataArray, *args, **kwargs):
+    def store_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
 
         chunk_size = self.dims_handler.dims_space[self.dims_handler.concat_dim]
-        for i in range(0, data.sizes[self.dims_handler.concat_dim], chunk_size):
-            act_data = data.isel(**{
+        for i in range(0, new_data.sizes[self.dims_handler.concat_dim], chunk_size):
+            act_data = new_data.isel(**{
                 self.dims_handler.concat_dim:
-                    list(range(i, min(i + chunk_size, data.sizes[self.dims_handler.concat_dim])))
+                    list(range(i, min(i + chunk_size, new_data.sizes[self.dims_handler.concat_dim])))
             })
             self.write_new_partition(act_data)
 

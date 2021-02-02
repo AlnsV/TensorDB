@@ -20,9 +20,9 @@ def get_default_file_store():
         'default_free_value': "free"
     }
     first_data = default_settings.copy()
-    first_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_one')
+    # first_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_one')
     second_data = default_settings.copy()
-    second_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_two')
+    # second_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_two')
 
     files_settings = {
         'data_one': first_data,
@@ -76,7 +76,7 @@ class TestFileStore:
 if __name__ == "__main__":
     test = TestFileStore()
     # test.test_store_data()
-    # test.test_update_data()
-    test.test_append_data()
+    test.test_update_data()
+    # test.test_append_data()
 
 

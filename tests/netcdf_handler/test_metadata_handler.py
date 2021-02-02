@@ -14,7 +14,10 @@ from config_root_dir import TEST_DIR_METADATA
 def get_default_metadata(first_write):
     return MetadataHandler(
         path=TEST_DIR_METADATA,
-        first_write=first_write
+        first_write=first_write,
+        attribute_1='test_1',
+        attribute_2={'index': 'ey'},
+        attribute_3=['1', '2'],
     )
 
 
@@ -24,9 +27,6 @@ def get_default_handler(path, first_write):
         dims=['index', 'columns'],
         dims_type={'index': 'fixed', 'columns': 'percentage'},
         dims_space={'index': 10, 'columns': 0.4},
-        attribute_1='test_1',
-        attribute_2={'index': 'ey'},
-        attribute_3=['1', '2'],
         first_write=first_write
     )
 
@@ -78,7 +78,7 @@ class TestMetadataHandler:
     def test_get_attributes(self):
         self.test_append_data()
         metadata_handler = get_default_metadata(False)
-        metadata = metadata_handler.get_partition_metadata(os.path.join(metadata_handler.path,  '0.nc'))
+        metadata = metadata_handler.get_metadata()
 
         assert metadata['attribute_1'] == 'test_1'
         assert metadata['attribute_2'] == {'index': 'ey'}
@@ -87,10 +87,10 @@ class TestMetadataHandler:
 
 if __name__ == "__main__":
     test = TestMetadataHandler()
-    test.test_concat_new_partition()
+    # test.test_concat_new_partition()
     # test.test_get_attributes()
     # test.test_append_data()
-    # test.test_get_attributes()
+    test.test_get_attributes()
 
 
 

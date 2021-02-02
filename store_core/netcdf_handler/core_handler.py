@@ -101,33 +101,44 @@ class BaseCoreHandler:
 
         return descriptors
 
+    @staticmethod
+    def get_external_computed_array(path, group) -> xarray.DataArray:
+        data = xarray.open_dataarray(path, group=group)
+        data_computed = data.compute()
+        data.close()
+        return data_computed
+
+    @staticmethod
+    def coords_to_string(data: xarray.DataArray):
+        return data.assign_coords({key: coord.astype(str) for key, coord in data.coords.items()})
+
 
 class CoreNetcdfHandler(BaseCoreHandler):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def write_file(self, data: xarray.DataArray):
-        self._write_file(data, 'w')
+    def write_file(self, new_data: xarray.DataArray):
+        self._write_file(new_data, 'w')
 
-    def write_as_new_group(self, data: xarray.DataArray):
-        self._write_file(data, 'a')
+    def write_as_new_group(self, new_data: xarray.DataArray):
+        self._write_file(new_data, 'a')
 
-    def _write_file(self, data, mode):
-        data = data
+    def _write_file(self, new_data, mode):
+        new_data = CoreNetcdfHandler.coords_to_string(new_data)
 
         # TODO: Add a validation in case that the data is bigger than the fixed dimensions
 
         # update the coords
-        self.dims_handler.update_coords(data.coords)
+        self.dims_handler.update_coords(new_data.coords)
 
-        if not self._is_data_complete(data):
-            data = self._concat_extra_space(data)
+        if not self._is_data_complete(new_data):
+            new_data = self._concat_extra_space(new_data)
 
-        data.to_netcdf(self.path,
-                       mode=mode,
-                       group=self.group,
-                       unlimited_dims=self.dims_handler.get_dims('dynamic'))
+        new_data.to_netcdf(self.path,
+                           mode=mode,
+                           group=self.group,
+                           unlimited_dims=self.dims_handler.get_dims('dynamic'))
 
     def _concat_extra_space(self, data):
         self.dims_handler.concat_free_coords()
@@ -153,7 +164,10 @@ class CoreNetcdfHandler(BaseCoreHandler):
             self.write_as_new_group(new_data)
             return
 
+        new_data = CoreNetcdfHandler.coords_to_string(new_data)
+
         new_coords = self.dims_handler.get_new_coords(new_data.coords)
+
         if self.dims_handler.concat_dim not in new_coords:
             dataset.close()
             return
@@ -191,26 +205,19 @@ class CoreNetcdfHandler(BaseCoreHandler):
                 return False
         return True
 
-    def update_data(self, data: xarray.DataArray):
+    def update_data(self, new_data: xarray.DataArray):
         dataset = netCDF4.Dataset(self.path, mode='a', format="NETCDF4")
         dataset_group = dataset.groups.get(self.group, dataset)
-        self._update_file(dataset_group, data)
+        self._update_file(dataset_group, CoreNetcdfHandler.coords_to_string(new_data))
         dataset.close()
 
     def _update_file(self,
                      dataset: netCDF4.Dataset,
-                     data: xarray.DataArray):
+                     new_data: xarray.DataArray):
 
-        coords_pos = self.dims_handler.get_positions_coords(data.coords)
+        coords_pos = self.dims_handler.get_positions_coords(new_data.coords)
         total_positions = tuple(coords_pos[dim] for dim in self.dims_handler.dims)
-        dataset.variables['__xarray_dataarray_variable__'][total_positions] = data.values
-
-    @staticmethod
-    def get_external_computed_array(path, group) -> xarray.DataArray:
-        data = xarray.open_dataarray(path, group=group)
-        data_computed = data.compute()
-        data.close()
-        return data_computed
+        dataset.variables['__xarray_dataarray_variable__'][total_positions] = new_data.values
 
 
 class CoreSimpleHandler(CoreNetcdfHandler):
@@ -241,12 +248,9 @@ class CoreSimpleHandler(CoreNetcdfHandler):
     def _update_file(self,
                      dataset: netCDF4.Dataset,
                      data: xarray.DataArray):
-
         coords = self.get_computed_coords()
         total_positions = tuple(
             get_positions_from_unsorted(coord, data.coords[dim].values)
             for dim, coord in coords.items()
         )
         dataset.variables['__xarray_dataarray_variable__'][total_positions] = data
-
-

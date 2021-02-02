@@ -21,7 +21,9 @@ class DimsHandler:
                  dims_type: Dict[str, str],
                  dims_space: Dict[str, Union[float, int]] = None,
                  default_free_value: Any = None,
-                 concat_dim: str = 'index'):
+                 concat_dim: str = 'index',
+                 *args,
+                 **kwargs):
 
         self._dims = dims
         self._coords = {dim: coords.get(dim, np.array([])) for dim in dims}

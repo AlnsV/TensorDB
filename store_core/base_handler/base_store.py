@@ -7,15 +7,15 @@ class BaseStore:
         pass
 
     @abstractmethod
-    def append_data(self, data: xarray.DataArray, *args, **kwargs):
+    def append_data(self, new_data: xarray.DataArray, *args, **kwargs):
         pass
 
     @abstractmethod
-    def update_data(self, data: xarray.DataArray, *args, **kwargs):
+    def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
         pass
 
     @abstractmethod
-    def store_data(self, data: xarray.DataArray, *args, **kwargs):
+    def store_data(self, new_data: xarray.DataArray, *args, **kwargs):
         pass
 
     @abstractmethod
