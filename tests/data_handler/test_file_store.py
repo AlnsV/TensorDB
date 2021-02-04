@@ -56,7 +56,6 @@ class TestFileStore:
         arr = create_dummy_array(10, 10)
         file_store.update_data(arr, 'data_one')
         assert compare_dataset(file_store.get_dataset('data_one'), arr)
-
         file_store.close()
 
     def test_append_data(self):

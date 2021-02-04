@@ -56,9 +56,11 @@ class PartitionsStore(BaseStore):
     @property
     def index(self):
         if self.dims_conversion is not None:
+            concat_dim = self.dims_handler.concat_dim
             return self.metadata.index.assign_coords({
-                name: modify_coord_dtype(coord.values, self.dims_conversion[name])
-                for name, coord in self.dataset.coords.items()
+                concat_dim: modify_coord_dtype(
+                    self.metadata.index.coords[concat_dim].values, self.dims_conversion[concat_dim]
+                )
             })
         return self.metadata.index
 
