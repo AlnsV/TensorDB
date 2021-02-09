@@ -40,6 +40,7 @@ class PartitionsStore(BaseStore):
 
         self.default_value = default_value
         self.cached_data = []
+        self.modified_partitions = set()
         self._last_partition = None
         self._last_partition_name = None
         self.dataset = None
@@ -72,7 +73,8 @@ class PartitionsStore(BaseStore):
     def last_partition(self) -> BaseCoreHandler:
         if self._last_partition_name is None or self.metadata.get_last_partition_name() != self._last_partition_name:
             self._last_partition_name = self.metadata.get_last_partition_name()
-            self._last_partition = self.get_core_partition(self._last_partition_name)
+            last_partition_path = self.metadata.get_last_partition_path()
+            self._last_partition = self.get_core_partition(path=last_partition_path)
 
         return self._last_partition
 
@@ -112,12 +114,12 @@ class PartitionsStore(BaseStore):
                 self.write_new_partition(new_data)
             else:
                 self.last_partition.append_data(new_data)
+                self.modified_partitions.add(self.last_partition.path)
 
             self.cached_data = []
 
     def write_new_partition(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
-
         new_partition = self.get_core_partition(
             path=os.path.join(self.metadata.path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
             first_write=True,
@@ -129,6 +131,7 @@ class PartitionsStore(BaseStore):
             new_partition.dims_handler.used_coords[self.dims_handler.concat_dim],
             new_partition
         )
+        self.modified_partitions.add(new_partition.path)
 
     def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
@@ -136,9 +139,10 @@ class PartitionsStore(BaseStore):
         partitions_index_groups = new_data.groupby(self.index.sel(columns='partition_pos'))
 
         for partition_pos, act_data in partitions_index_groups:
-            partition_name = self.partition_names.values[partition_pos, 0]
-            partition = self.get_core_partition(partition_name, *args, **kwargs)
+            partition_path = self.metadata.get_partition_path(partition_pos)
+            partition = self.get_core_partition(partition_path, *args, **kwargs)
             partition.update_data(act_data)
+            self.modified_partitions.add(partition.path)
 
     def store_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
@@ -156,7 +160,7 @@ class PartitionsStore(BaseStore):
             return self.dataset
 
         self.dataset = xarray.open_mfdataset(
-            list(self.metadata.partition_names.coords['index'].values),
+            self.metadata.get_partition_paths(),
             concat_dim=['index'],
             combine='nested'
         )

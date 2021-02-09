@@ -1,22 +1,25 @@
 import xarray
 import os
 
-from typing import Dict, List, Any, Union, Callable, Generic
+from typing import Dict, List, Any, Union, Callable
 from loguru import logger
 
 from store_core.base_handler.base_store import BaseStore
+from config_root_dir import ROOT_DIR
 
 
 class FilesStore:
     def __init__(self,
-                 base_path: str,
                  files_settings: Dict[str, Dict[str, Any]],
                  data_handler: Callable[[BaseStore], BaseStore],
+                 base_path: str = None,
                  use_env: bool = True,
                  *args,
                  **kwargs):
 
         self.base_path = base_path
+        if self.base_path is None:
+            self.base_path = os.path.join(ROOT_DIR, 'file_db')
         self.files_settings = files_settings
         self.open_base_store: Dict[str, BaseStore] = {}
         self.data_handler = data_handler
@@ -82,7 +85,10 @@ class FilesStore:
 
         return os.path.join(self.base_path, self.files_settings[name].get('extra_path', ''), path)
 
-    def close_store(self, name):
+    def close_store(self, name, *args, **kwargs):
+        if 'close_store' in self.files_settings[name]:
+            return getattr(self, self.files_settings[name]['close_store'])(name, *args, **kwargs)
+
         if name in self.open_base_store:
             self.open_base_store[name].close()
             del self.open_base_store[name]

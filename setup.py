@@ -29,6 +29,7 @@ setup(
         'netCDF4',
         'numpy',
         'loguru',
-        'dask'
+        'dask',
+        'boto3'
     ]
 )

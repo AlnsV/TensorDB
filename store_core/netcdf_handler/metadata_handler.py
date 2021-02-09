@@ -8,7 +8,7 @@ import os
 from typing import Dict, List, Any, Union
 from loguru import logger
 
-from .core_handler import CoreNetcdfHandler
+from .core_handler import CoreNetcdfHandler, BaseCoreHandler
 
 
 def get_partition_index(data=None, index=None):
@@ -86,26 +86,26 @@ class MetadataHandler:
 
     def concat_new_partition(self,
                              indexes: np.array,
-                             partition: CoreNetcdfHandler):
+                             partition: BaseCoreHandler):
 
         if self.index is not None:
             if np.any(self.index.coords['index'].isin(indexes)):
                 raise ValueError(f"You are appending a repeated value in concat dimension.")
 
         if self.partition_names is None:
-            self.partition_names = get_partition_name(partition.path)
+            self.partition_names = get_partition_name(partition.name)
         elif partition.path in self.partition_names.coords['index']:
             raise ValueError(f"You are concatenating an used partition")
         else:
             self.partition_names = xarray.concat(
-                [self.partition_names, get_partition_name(partition.path)],
+                [self.partition_names, get_partition_name(partition.name)],
                 dim='index',
             )
 
         self.append_row_index(indexes, 0)
 
         # create an empty group
-        xarray.DataArray().to_netcdf(self.metadata_path, group=partition.path, mode='a')
+        # xarray.DataArray().to_netcdf(self.metadata_path, group=partition.path, mode='a')
 
         # self.save_partition_metadata(partition)
 
@@ -179,8 +179,17 @@ class MetadataHandler:
     def get_last_partition_name(self) -> str:
         return self.partition_names.values[self.index[-1].loc['partition_pos'].values][0]
 
+    def get_last_partition_path(self) -> str:
+        return os.path.join(self.path, self.get_last_partition_name())
+
     def get_last_internal_pos(self) -> int:
         return self.index[-1].loc['internal_partition_pos'].values
+
+    def get_partition_path(self, partition_pos: int) -> str:
+        return os.path.join(self.path, self.partition_names.values[partition_pos, 0])
+
+    def get_partition_paths(self) -> List[str]:
+        return [os.path.join(self.path, name) for name in self.partition_names.values[:, 0]]
 
     def get_metadata(self, group: str = None) -> Dict[str, Any]:
         dataset = netCDF4.Dataset(self.metadata_path, mode='r')

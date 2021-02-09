@@ -26,6 +26,7 @@ class BaseCoreHandler:
 
         self.path = path
         self.group = group
+        self.name = os.path.basename(self.path)
         self.default_value = default_value
         self.dims_handler = DimsHandler(
             coords=self.get_computed_coords(dims) if not first_write else {},
