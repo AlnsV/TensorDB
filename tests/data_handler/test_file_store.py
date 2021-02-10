@@ -1,15 +1,7 @@
-import xarray
-import numpy as np
-import netCDF4
-import os
-
-from loguru import logger
-from typing import Dict, List
-
 from store_core.data_handler.files_store import FilesStore
 from store_core.netcdf_handler.partitions_handler import PartitionsStore
 from store_core.utils import create_dummy_array, compare_dataset
-from config_root_dir import TEST_DIR_FILE_STORE
+from config_path.config_root_dir import TEST_DIR_FILE_STORE
 
 
 def get_default_file_store():

@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Union
 from loguru import logger
 
 from .core_handler import CoreNetcdfHandler, BaseCoreHandler
+from .attributes_utils import get_attribute, get_all_attributes, save_attributes
 
 
 def get_partition_index(data=None, index=None):
@@ -60,16 +61,16 @@ class MetadataHandler:
         self.path = path
         self.first_write = first_write
         self.metadata_path = os.path.join(self.path, 'metadata.nc')
+        self.partition_names: List[str] = []
 
         if self.first_write:
             # create an empty file
             xarray.DataArray().to_netcdf(self.metadata_path)
-            self.partition_names = None
             self.index = None
-            self.save_metadata(**kwargs)
+            self.save_attributes(**kwargs)
         else:
             self.index = CoreNetcdfHandler.get_external_computed_array(self.metadata_path, 'index')
-            self.partition_names = CoreNetcdfHandler.get_external_computed_array(self.metadata_path, 'partition_names')
+            self.partition_names = self.get_attribute(name='partition_names')
 
     def _create_default_core_metadata_handler(self, group, first_write, dims_space=None):
         dims_space = dims_space
@@ -92,69 +93,34 @@ class MetadataHandler:
             if np.any(self.index.coords['index'].isin(indexes)):
                 raise ValueError(f"You are appending a repeated value in concat dimension.")
 
-        if self.partition_names is None:
-            self.partition_names = get_partition_name(partition.name)
-        elif partition.path in self.partition_names.coords['index']:
+        if partition.name in self.partition_names:
             raise ValueError(f"You are concatenating an used partition")
-        else:
-            self.partition_names = xarray.concat(
-                [self.partition_names, get_partition_name(partition.name)],
-                dim='index',
-            )
+
+        self.partition_names.append(partition.name)
 
         self.append_row_index(indexes, 0)
 
-        # create an empty group
-        # xarray.DataArray().to_netcdf(self.metadata_path, group=partition.path, mode='a')
+    def get_attribute(self, name, group: str = None, default: Any = None):
+        return get_attribute(path=self.metadata_path, name=name, group=group, default=default)
 
-        # self.save_partition_metadata(partition)
+    def get_all_attributes(self,  group: str = None):
+        return get_all_attributes(path=self.metadata_path, group=group)
 
-    # def save_partition_metadata(self, partition: CoreNetcdfHandler):
-    #     attributes = {}
-    #     transformed_to_str_data = []
-    #
-    #     for key, val in partition.get_descriptors().items():
-    #         if isinstance(val, (list, dict, bool)) or val != val or val is None:
-    #             transformed_to_str_data.append(key)
-    #             attributes[key] = str(val)
-    #         else:
-    #             attributes[key] = val
-    #
-    #     attributes['transformed_to_str_data'] = str(transformed_to_str_data)
-    #     dataset = netCDF4.Dataset(self.metadata_path, mode='a')
-    #     group_partition = dataset.groups.get(partition.path, dataset)
-    #     group_partition.setncatts(attributes)
-    #     dataset.close()
-
-    def save_metadata(self, group: str = None, **kwargs):
-        attributes = {}
-        transformed_to_str_data = []
-
-        for key, val in kwargs.items():
-            if isinstance(val, (list, dict, bool)) or val != val or val is None:
-                transformed_to_str_data.append(key)
-                attributes[key] = str(val)
-            else:
-                attributes[key] = val
-
-        attributes['transformed_to_str_data'] = str(transformed_to_str_data)
-        dataset = netCDF4.Dataset(self.metadata_path, mode='a')
-        group_partition = dataset.groups.get(group, dataset)
-        group_partition.setncatts(attributes)
-        dataset.close()
+    def save_attributes(self, group: str = None, **kwargs):
+        save_attributes(path=self.metadata_path, group=group, **kwargs)
 
     def append_row_index(self,
                          indexes: np.array,
                          internal_partition_pos: int = None):
 
-        if self.partition_names is None:
+        if len(self.partition_names) == 0:
             raise Exception(f"You can't append data to an empty file")
 
         internal_partition_pos = internal_partition_pos
         if internal_partition_pos is None:
-            internal_partition_pos = self.get_last_internal_pos()
+            internal_partition_pos = self.get_last_internal_pos() + 1
 
-        partition_pos = self.partition_names.sizes['index'] - 1
+        partition_pos = len(self.partition_names) - 1
         new_partition_pos = [[partition_pos, internal_partition_pos + i] for i, index in enumerate(indexes)]
 
         if self.index is None:
@@ -177,7 +143,7 @@ class MetadataHandler:
         pass
 
     def get_last_partition_name(self) -> str:
-        return self.partition_names.values[self.index[-1].loc['partition_pos'].values][0]
+        return self.partition_names[-1]
 
     def get_last_partition_path(self) -> str:
         return os.path.join(self.path, self.get_last_partition_name())
@@ -186,33 +152,10 @@ class MetadataHandler:
         return self.index[-1].loc['internal_partition_pos'].values
 
     def get_partition_path(self, partition_pos: int) -> str:
-        return os.path.join(self.path, self.partition_names.values[partition_pos, 0])
+        return os.path.join(self.path, self.partition_names[partition_pos])
 
     def get_partition_paths(self) -> List[str]:
-        return [os.path.join(self.path, name) for name in self.partition_names.values[:, 0]]
-
-    def get_metadata(self, group: str = None) -> Dict[str, Any]:
-        dataset = netCDF4.Dataset(self.metadata_path, mode='r')
-        group_partition = dataset.groups.get(group, dataset)
-        attributes = {}
-        transform = set(ast.literal_eval(group_partition.transformed_to_str_data))
-        for key, val in group_partition.__dict__.items():
-            if key == 'transformed_to_str_data':
-                continue
-
-            if key in transform:
-                if val == 'True' or val == 'False':
-                    val = bool(val)
-                elif val == 'nan':
-                    val = np.nan
-                else:
-                    val = ast.literal_eval(val)
-
-            attributes[key] = val
-
-        dataset.close()
-
-        return attributes
+        return [os.path.join(self.path, name) for name in self.partition_names]
 
     def _update_files(self, data, group, **kwargs):
         core_file = self._create_default_core_metadata_handler(group, self.first_write, **kwargs)
@@ -225,11 +168,11 @@ class MetadataHandler:
     def close(self):
         self.save()
         self.index = None
-        self.partition_names = None
+        self.partition_names = []
 
     def save(self):
+        self.save_attributes(partition_names=self.partition_names)
         self._update_files(self.index, 'index')
-        self._update_files(self.partition_names, 'partition_names', dims_space={'columns': 1})
         self.first_write = False
 
 

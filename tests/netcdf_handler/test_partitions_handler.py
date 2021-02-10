@@ -1,14 +1,10 @@
-import xarray
-import numpy as np
-import netCDF4
 import os
 
 from loguru import logger
-from typing import Dict, List, Union
 
 from store_core.netcdf_handler.partitions_handler import PartitionsStore
 from store_core.utils import create_dummy_array, compare_dataset
-from config_root_dir import TEST_DIR_PARTITIONS
+from config_path.config_root_dir import TEST_DIR_PARTITIONS
 
 
 class TestPartitionsHandler:
@@ -37,7 +33,7 @@ class TestPartitionsHandler:
         dataset = partitions_store.get_dataset()
 
         assert compare_dataset(dataset, arr)
-        assert partitions_store.metadata.partition_names.sizes['index'] == 2
+        assert len(partitions_store.partition_names) == 2
 
         partitions_store.close()
 
@@ -59,7 +55,7 @@ class TestPartitionsHandler:
 
         dataset = partitions_store.get_dataset()
         assert compare_dataset(dataset, arr)
-        assert partitions_store.metadata.partition_names.sizes['index'] == 2
+        assert len(partitions_store.partition_names) == 2
 
         partitions_store.close()
 

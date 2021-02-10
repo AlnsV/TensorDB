@@ -3,12 +3,11 @@ import numpy as np
 import os
 import netCDF4
 
-from loguru import logger
-from typing import Dict, List
+from typing import Dict
 
 from store_core.netcdf_handler.core_handler import CoreSimpleHandler
 from store_core.utils import create_dummy_array
-from config_root_dir import TEST_DIR_CORE
+from config_path.config_root_dir import TEST_DIR_CORE
 
 
 def get_default_handler(first_write):

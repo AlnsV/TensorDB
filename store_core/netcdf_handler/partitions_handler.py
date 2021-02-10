@@ -66,7 +66,7 @@ class PartitionsStore(BaseStore):
         return self.metadata.index
 
     @property
-    def partition_names(self):
+    def partition_names(self) -> List[str]:
         return self.metadata.partition_names
 
     @property
@@ -114,6 +114,7 @@ class PartitionsStore(BaseStore):
                 self.write_new_partition(new_data)
             else:
                 self.last_partition.append_data(new_data)
+                self.metadata.append_row_index(new_data.coords['index'].values)
                 self.modified_partitions.add(self.last_partition.path)
 
             self.cached_data = []

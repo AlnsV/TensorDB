@@ -1,14 +1,12 @@
 import xarray
 import numpy as np
-import netCDF4
 import os
 
 from loguru import logger
-from typing import Dict, List
 
 from store_core.netcdf_handler.metadata_handler import MetadataHandler
 from store_core.netcdf_handler.core_handler import CoreNetcdfHandler
-from config_root_dir import TEST_DIR_METADATA
+from config_path.config_root_dir import TEST_DIR_METADATA, EPA
 
 
 def get_default_metadata(first_write):
@@ -47,14 +45,13 @@ class TestMetadataHandler:
         partition_paths = metadata_handler.get_partition_paths()
         metadata_handler.close()
         index = xarray.open_dataarray(metadata_handler.metadata_path, group='index')
-        partition_names = xarray.open_dataarray(metadata_handler.metadata_path, group='partition_names')
+        partition_names = metadata_handler.get_attribute('partition_names')
 
         assert np.all(index.loc[:, 'partition_pos'].values == 0)
         assert np.all(index.coords['index'].values == np.array(['0', '1', '2', '3']))
         assert np.all(index.loc[:, 'internal_partition_pos'].values == np.array([0, 1, 2, 3]))
         assert np.all(np.array(partition_paths) == core_handler.path)
-        assert np.all(partition_names.loc[:, 'partition_names'].values == core_handler.name)
-        assert np.all(partition_names.coords['index'].values == core_handler.name)
+        assert np.all(np.array(partition_names) == core_handler.name)
 
     def test_append_data(self):
         self.test_concat_new_partition()
@@ -62,26 +59,26 @@ class TestMetadataHandler:
 
         metadata_handler.append_row_index(
             np.array(['4', '5', '6', '7']),
-            4
         )
         partition_paths = metadata_handler.get_partition_paths()
         metadata_handler.close()
         index = xarray.open_dataarray(metadata_handler.metadata_path, group='index')
-        partition_names = xarray.open_dataarray(metadata_handler.metadata_path, group='partition_names')
+        partition_names = metadata_handler.get_attribute('partition_names')
 
         assert np.all(index.loc[:, 'partition_pos'].values == 0)
         assert np.all(index.coords['index'].values == np.array(['0', '1', '2', '3', '4', '5', '6', '7']))
         assert np.all(index.loc[:, 'internal_partition_pos'].values ==
                       np.array([0, 1, 2, 3, 4, 5, 6, 7]))
 
-        assert np.all(partition_names.loc[:, 'partition_names'].values == '0.nc')
-        assert np.all(partition_names.coords['index'].values == '0.nc')
+        assert np.all(np.array(partition_names) == '0.nc')
         assert np.all(np.array(partition_paths) == os.path.join(metadata_handler.path,  '0.nc'))
 
     def test_get_attributes(self):
         self.test_append_data()
+        logger.info("fsadfa")
         metadata_handler = get_default_metadata(False)
-        metadata = metadata_handler.get_metadata()
+        metadata = metadata_handler.get_all_attributes()
+        logger.info(metadata)
 
         assert metadata['attribute_1'] == 'test_1'
         assert metadata['attribute_2'] == {'index': 'ey'}
@@ -91,8 +88,8 @@ class TestMetadataHandler:
 if __name__ == "__main__":
     test = TestMetadataHandler()
     # test.test_concat_new_partition()
-    test.test_append_data()
-    # test.test_get_attributes()
+    # test.test_append_data()
+    test.test_get_attributes()
 
 
 
