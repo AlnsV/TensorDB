@@ -8,7 +8,7 @@ from config_path.config_root_dir import TEST_DIR_PARTITIONS
 
 
 class TestPartitionsHandler:
-
+    # d
     def test_write_new_partitions(self):
         partitions_store = PartitionsStore(
             path=TEST_DIR_PARTITIONS + '/creation',
