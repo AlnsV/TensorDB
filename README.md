@@ -1,8 +1,18 @@
 # File System Storage
 
-First version of a file system storage based in xarray.
+First version of a file system storage based in xarray. It will work with S3 and local storage, basically It will
+download the files from S3 to the local storage, after that the local machine will do all the calculations
+using those local files and upload it again to S3 if it is necessary. This behaviour is not ideal for big files
+because download a big files takes a lot of time and added to that process a big file requires more resources
+if we want to reduce the execution time, so have multiple services with a lot of resources is not ideal. 
 
-This project can be seen as a database of files.
+The second version probably will be a Database that works with files and instead of use SQL as the query languages 
+we will use an online Xarray, this mean that instead of moving the data to one machine and calculate, 
+we will move an online Xarray that "reference" the original files, so using this we will be able to make any kind
+of operations with a very familiar syntax and all will be calculated in a principal cluster with more resources, 
+of course this idea has some disadvantages, and the principal is that we could require sent a lot of data using 
+some common format to all the services could be pickle or json or saving the results in S3,
+send this data could take a lot of time
 
 ## General Structure
 
