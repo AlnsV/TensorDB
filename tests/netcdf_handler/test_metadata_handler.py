@@ -1,21 +1,31 @@
 import xarray
 import numpy as np
 import os
+import pandas as pd
 
 from loguru import logger
 
 from store_core.netcdf_handler.metadata_handler import MetadataHandler
 from store_core.netcdf_handler.core_handler import CoreNetcdfHandler
-from config_path.config_root_dir import TEST_DIR_METADATA, EPA
+from config_path.config_root_dir import TEST_DIR_METADATA
 
 
 def get_default_metadata(first_write):
     return MetadataHandler(
-        path=TEST_DIR_METADATA,
+        base_path=TEST_DIR_METADATA,
         first_write=first_write,
         attribute_1='test_1',
         attribute_2={'index': 'ey'},
         attribute_3=['1', '2'],
+        attribute_4={
+            '10': {
+                '100': pd.Timestamp.now().strftime('%Y-%m-%d'),
+                '200': {
+                    '300': pd.Timestamp.now().strftime('%Y-%m-%d')
+                }
+            }
+        },
+        metadata_file_name='metadata.nc',
     )
 
 
@@ -35,7 +45,7 @@ class TestMetadataHandler:
         metadata_handler = get_default_metadata(True)
 
         core_handler = get_default_handler(
-            os.path.join(metadata_handler.path,  '0.nc'),
+            os.path.join(metadata_handler.base_path,  '0.nc'),
             True
         )
         metadata_handler.concat_new_partition(
@@ -45,7 +55,9 @@ class TestMetadataHandler:
         partition_paths = metadata_handler.get_partition_paths()
         metadata_handler.close()
         index = xarray.open_dataarray(metadata_handler.metadata_path, group='index')
-        partition_names = metadata_handler.get_attribute('partition_names')
+        partition_names = metadata_handler.get_attribute('partitions_metadata')
+        partition_names = [name for name in partition_names.keys()
+                           if name != metadata_handler.metadata_file_name]
 
         assert np.all(index.loc[:, 'partition_pos'].values == 0)
         assert np.all(index.coords['index'].values == np.array(['0', '1', '2', '3']))
@@ -63,7 +75,9 @@ class TestMetadataHandler:
         partition_paths = metadata_handler.get_partition_paths()
         metadata_handler.close()
         index = xarray.open_dataarray(metadata_handler.metadata_path, group='index')
-        partition_names = metadata_handler.get_attribute('partition_names')
+        partition_names = metadata_handler.get_attribute('partitions_metadata')
+        partition_names = [name for name in partition_names.keys()
+                           if name != metadata_handler.metadata_file_name]
 
         assert np.all(index.loc[:, 'partition_pos'].values == 0)
         assert np.all(index.coords['index'].values == np.array(['0', '1', '2', '3', '4', '5', '6', '7']))
@@ -71,7 +85,7 @@ class TestMetadataHandler:
                       np.array([0, 1, 2, 3, 4, 5, 6, 7]))
 
         assert np.all(np.array(partition_names) == '0.nc')
-        assert np.all(np.array(partition_paths) == os.path.join(metadata_handler.path,  '0.nc'))
+        assert np.all(np.array(partition_paths) == os.path.join(metadata_handler.base_path,  '0.nc'))
 
     def test_get_attributes(self):
         self.test_append_data()
@@ -83,6 +97,14 @@ class TestMetadataHandler:
         assert metadata['attribute_1'] == 'test_1'
         assert metadata['attribute_2'] == {'index': 'ey'}
         assert metadata['attribute_3'] == ['1', '2']
+        assert metadata['attribute_4'] == {
+            '10': {
+                '100': pd.Timestamp.now().strftime('%Y-%m-%d'),
+                '200': {
+                    '300': pd.Timestamp.now().strftime('%Y-%m-%d')
+                }
+            }
+        }
 
 
 if __name__ == "__main__":

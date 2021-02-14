@@ -1,3 +1,5 @@
+from loguru import logger
+
 from store_core.data_handler.files_store import FilesStore
 from store_core.netcdf_handler.partitions_handler import PartitionsStore
 from store_core.utils import create_dummy_array, compare_dataset
@@ -9,7 +11,9 @@ def get_default_file_store():
         'dims': ['index', 'columns'],
         'dims_type': {'index': 'fixed', 'columns': 'percentage'},
         'dims_space': {'index': 5, 'columns': 0.1},
-        'default_free_value': "free"
+        'default_free_value': "free",
+        'metadata_file_name': 'metadata.nc',
+        'bucket_name': 'test.bitacore.data.2.0'
     }
     first_data = default_settings.copy()
     # first_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_one')
@@ -25,13 +29,19 @@ def get_default_file_store():
         base_path=TEST_DIR_FILE_STORE,
         files_settings=files_settings,
         data_handler=PartitionsStore,
-        use_env=False
+        use_env=False,
+        s3_settings={
+            'aws_access_key_id': "AKIAV5EJ3JJSZ5JQTD3K",
+            'aws_secret_access_key': "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",
+            'region_name': 'us-east-2',
+        }
     )
 
 
 class TestFileStore:
     def test_store_data(self):
         file_store = get_default_file_store()
+        import os
         arr = create_dummy_array(10, 10)
         file_store.store_data(arr, 'data_one')
         assert compare_dataset(file_store.get_dataset('data_one'), arr)
@@ -52,6 +62,7 @@ class TestFileStore:
 
     def test_append_data(self):
         self.test_store_data()
+        logger.info("over here")
         file_store = get_default_file_store()
 
         arr = create_dummy_array(20, 10)
@@ -67,7 +78,7 @@ class TestFileStore:
 if __name__ == "__main__":
     test = TestFileStore()
     # test.test_store_data()
-    test.test_update_data()
-    # test.test_append_data()
+    # test.test_update_data()
+    test.test_append_data()
 
 

@@ -12,4 +12,4 @@ TEST_DIR_CORE = os.path.join(TEST_DIR, 'data', 'test_core')
 TEST_DIR_METADATA = os.path.join(TEST_DIR, 'data', 'test_metadata')
 TEST_DIR_PARTITIONS = os.path.join(TEST_DIR, 'data', 'test_partitions')
 TEST_DIR_FILE_STORE = os.path.join(TEST_DIR, 'data', 'test_file_store')
-EPA = ROOT_DIR
+TEST_DIR_S3 = os.path.join(TEST_DIR, 'data', 'test_s3')

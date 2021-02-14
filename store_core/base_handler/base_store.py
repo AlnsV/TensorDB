@@ -3,7 +3,8 @@ from abc import abstractmethod
 
 
 class BaseStore:
-    def __init__(self, *args, **kwargs):
+    def __init__(self, base_path: str, *args, **kwargs):
+        self.base_path = base_path
         pass
 
     @abstractmethod

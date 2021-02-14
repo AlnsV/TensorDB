@@ -11,12 +11,12 @@ class TestPartitionsHandler:
     # d
     def test_write_new_partitions(self):
         partitions_store = PartitionsStore(
-            path=TEST_DIR_PARTITIONS + '/creation',
+            base_path=TEST_DIR_PARTITIONS + '/creation',
             dims=['index', 'columns'],
             dims_type={'index': 'fixed', 'columns': 'percentage'},
             dims_space={'index': 5, 'columns': 0.1},
             first_write=True,
-            default_free_value='free'
+            default_free_value='free',
         )
         arr = create_dummy_array(10, 10)
 
@@ -39,7 +39,7 @@ class TestPartitionsHandler:
 
     def test_append_data(self):
         partitions_store = PartitionsStore(
-            path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+            base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
             dims=['index', 'columns'],
             dims_type={'index': 'fixed', 'columns': 'percentage'},
             dims_space={'index': 5, 'columns': 0.1},
@@ -54,6 +54,7 @@ class TestPartitionsHandler:
         partitions_store.save()
 
         dataset = partitions_store.get_dataset()
+
         assert compare_dataset(dataset, arr)
         assert len(partitions_store.partition_names) == 2
 
@@ -63,7 +64,7 @@ class TestPartitionsHandler:
 
     def test_store_data(self):
         partitions_store = PartitionsStore(
-            path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+            base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
             dims=['index', 'columns'],
             dims_type={'index': 'fixed', 'columns': 'percentage'},
             dims_space={'index': 5, 'columns': 0.1},
@@ -78,16 +79,18 @@ class TestPartitionsHandler:
         dataset = partitions_store.get_dataset()
 
         assert compare_dataset(dataset, arr)
+        assert len(partitions_store.partition_names) == 4
 
         partitions_store.close()
 
     def test_update_data(self):
         self.test_store_data()
         partitions_store = PartitionsStore(
-            path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+            base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
             dims=['index', 'columns'],
             dims_type={'index': 'fixed', 'columns': 'percentage'},
             dims_space={'index': 5, 'columns': 0.1},
+            first_write=False,
             max_cached_data=5,
             default_free_value='free'
         )
@@ -106,5 +109,5 @@ if __name__ == "__main__":
     test = TestPartitionsHandler()
     # test.test_write_new_partitions()
     # test.test_append_data()
-    # test.test_store_data()
-    test.test_update_data()
+    test.test_store_data()
+    # test.test_update_data()

@@ -14,20 +14,20 @@ from store_core.utils import modify_coord_dtype
 
 class PartitionsStore(BaseStore):
     def __init__(self,
-                 path: str,
                  dims_conversion: Dict[str, str] = None,
                  default_value: Any = np.nan,
                  max_cached_data: int = 0,
-                 first_write: bool = False,
                  core_handler: Union[Callable[[BaseCoreHandler], BaseCoreHandler], str] = None,
+                 first_write: bool = False,
+                 metadata_file_name: str = "metadata.nc",
                  *args,
                  **kwargs):
 
         super().__init__(*args, **kwargs)
 
         self.metadata = MetadataHandler(
-            path=path,
             first_write=first_write,
+            metadata_file_name=metadata_file_name,
             *args,
             **kwargs
         )
@@ -114,15 +114,16 @@ class PartitionsStore(BaseStore):
                 self.write_new_partition(new_data)
             else:
                 self.last_partition.append_data(new_data)
-                self.metadata.append_row_index(new_data.coords['index'].values)
-                self.modified_partitions.add(self.last_partition.path)
+                self.metadata.append_row_index(new_data.coords['index'].values, *args, **kwargs)
+                self.modified_partitions.add(self.last_partition.name)
+                self.modified_partitions.add(self.metadata.metadata_file_name)
 
             self.cached_data = []
 
     def write_new_partition(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
         new_partition = self.get_core_partition(
-            path=os.path.join(self.metadata.path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
+            path=os.path.join(self.base_path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
             first_write=True,
             *args,
             **kwargs
@@ -130,9 +131,12 @@ class PartitionsStore(BaseStore):
         new_partition.write_file(new_data)
         self.metadata.concat_new_partition(
             new_partition.dims_handler.used_coords[self.dims_handler.concat_dim],
-            new_partition
+            new_partition,
+            *args,
+            **kwargs
         )
-        self.modified_partitions.add(new_partition.path)
+        self.modified_partitions.add(new_partition.name)
+        self.modified_partitions.add(self.metadata.metadata_file_name)
 
     def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
@@ -143,7 +147,8 @@ class PartitionsStore(BaseStore):
             partition_path = self.metadata.get_partition_path(partition_pos)
             partition = self.get_core_partition(partition_path, *args, **kwargs)
             partition.update_data(act_data)
-            self.modified_partitions.add(partition.path)
+            self.modified_partitions.add(partition.name)
+            self.metadata.partitions_metadata[partition.name].update(**kwargs)
 
     def store_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
@@ -154,7 +159,7 @@ class PartitionsStore(BaseStore):
                 self.dims_handler.concat_dim:
                     list(range(i, min(i + chunk_size, new_data.sizes[self.dims_handler.concat_dim])))
             })
-            self.write_new_partition(act_data)
+            self.write_new_partition(act_data, *args, **kwargs)
 
     def get_dataset(self) -> xarray.Dataset:
         if self.dataset is not None:

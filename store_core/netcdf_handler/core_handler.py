@@ -103,7 +103,7 @@ class BaseCoreHandler:
         return descriptors
 
     @staticmethod
-    def get_external_computed_array(path, group) -> xarray.DataArray:
+    def get_external_computed_array(path: str, group: str = None) -> xarray.DataArray:
         data = xarray.open_dataarray(path, group=group)
         data_computed = data.compute()
         data.close()
