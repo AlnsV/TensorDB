@@ -7,7 +7,6 @@ from loguru import logger
 
 from store_core.base_handler.base_store import BaseStore
 from store_core.netcdf_handler.core_handler import CoreNetcdfHandler, BaseCoreHandler
-from store_core.netcdf_handler.dims_handler import DimsHandler
 from store_core.netcdf_handler.metadata_handler import MetadataHandler
 from store_core.utils import modify_coord_dtype
 
@@ -32,12 +31,6 @@ class PartitionsStore(BaseStore):
             **kwargs
         )
 
-        self.dims_handler = DimsHandler(
-            coords={},
-            *args,
-            **kwargs
-        )
-
         self.default_value = default_value
         self.cached_data = []
         self.modified_partitions = set()
@@ -50,7 +43,7 @@ class PartitionsStore(BaseStore):
         if self.core_handler is None:
             self.core_handler = CoreNetcdfHandler
         elif isinstance(self.core_handler, str):
-            pass
+            raise NotImplemented("Using an string to select the core handler is not supported")
 
         self.count_writes = 0
 

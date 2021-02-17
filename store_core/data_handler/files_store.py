@@ -19,6 +19,7 @@ class FilesStore:
                  use_env: bool = True,
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
                  metadata_handler: BaseMetadataHandler = None,
+                 max_files_in_disk: int = 30,
                  *args,
                  **kwargs):
 
@@ -30,6 +31,7 @@ class FilesStore:
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
         self.last_modified_date = {}
         self.data_handler = data_handler
+        self.max_files_in_disk = max_files_in_disk
 
         if use_env:
             self.base_path = os.path.join(self.base_path, os.getenv("ENV_MODE"))
@@ -50,13 +52,21 @@ class FilesStore:
         if not avoid_download:
             self.download_partitions(file_setting_id, path)
         local_base_path = self.complete_path(file_setting_id=file_setting_id, path=path)
-        if local_base_path not in self.open_base_store:
+        if local_base_path not in self.open_base_store or not self.open_base_store[local_base_path]['open']:
+
+            if len(self.open_base_store) + 1 > self.max_files_in_disk:
+                self._delete_excess_files([])
+
             kwargs['base_path'] = local_base_path
             self.open_base_store[local_base_path] = {
                 'file_setting_id': file_setting_id,
                 'path': path,
-                'handler': self.data_handler(**self.files_settings[file_setting_id], **kwargs)
+                'handler': self.data_handler(**self.files_settings[file_setting_id], **kwargs),
+                'open': True,
+                'first_read_date': pd.Timestamp.now(),
+                'num_use': 0
             }
+        self.open_base_store[local_base_path]['num_use'] += 1
         return self.open_base_store[local_base_path]['handler']
 
     def get_dataset(self, file_setting_id: str, path: Union[str, List] = None, *args, **kwargs) -> xarray.Dataset:
@@ -208,6 +218,7 @@ class FilesStore:
         if complete_path in self.open_base_store:
             modified_partitions = self.open_base_store[complete_path]['handler'].modified_partitions
             self.open_base_store[complete_path]['handler'].close()
+            self.open_base_store[complete_path]['open'] = False
             if self.s3_handler is not None and modified_partitions:
                 # update the modified files to s3
                 s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
@@ -219,13 +230,39 @@ class FilesStore:
                         **self.files_settings[file_setting_id]
                     )
 
-            del self.open_base_store[complete_path]
-
     def delete_store(self, file_setting_id: str, path: Union[List[str], str] = None, *args, **kwargs):
         self.close_store(file_setting_id, path)
-        complete_path = self.complete_path(file_setting_id, path)
-        # TODO Implement this
-        pass
+        local_base_path = self.complete_path(file_setting_id, path=path)
+        metadata_file_name = self.files_settings[file_setting_id]['metadata_file_name']
+        local_metadata_path = os.path.join(local_base_path, metadata_file_name)
+        if not os.path.exists(local_metadata_path):
+            return
+
+        del self.open_base_store[local_base_path]
+
+        total_paths = self.metadata_handler(
+            path=local_metadata_path,
+            base_path=local_base_path,
+            first_write=False,
+            metadata_file_name=metadata_file_name,
+            avoid_load_index=True
+        ).get_partition_paths()
+        total_paths += [local_metadata_path]
+
+        for path in total_paths:
+            os.remove(path)
+
+    def _delete_excess_files(self, exclude):
+        act_date = pd.Timestamp.now()
+        stores_to_delete = {
+            k: ((act_date - v['first_read_date']).days + 1) / v['num_use']
+            for k, v in self.open_base_store.items() if k not in exclude
+        }
+
+        if len(stores_to_delete) == 0:
+            return
+        less_used_store = min(stores_to_delete.items(), key=lambda x: x[1])[0]
+        self.delete_store(**self.open_base_store[less_used_store])
 
     def close(self):
         for key in list(self.open_base_store.keys()):
