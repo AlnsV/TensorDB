@@ -86,7 +86,6 @@ class PartitionsStore(BaseStore):
         )
 
     def append_data(self, new_data: xarray.DataArray, force_write: bool = False, *args, **kwargs):
-
         self.close_dataset()
 
         if new_data is not None:
@@ -107,7 +106,7 @@ class PartitionsStore(BaseStore):
                 self.write_new_partition(new_data)
             else:
                 self.last_partition.append_data(new_data)
-                self.metadata.append_row_index(new_data.coords['index'].values, *args, **kwargs)
+                self.metadata.append_index(new_data.coords['index'].values, *args, **kwargs)
                 self.modified_partitions.add(self.last_partition.name)
                 self.modified_partitions.add(self.metadata.metadata_file_name)
 

@@ -51,6 +51,7 @@ class FilesStore:
     def get_handler(self, file_setting_id: str, path: Union[str, List] = None, avoid_download: bool = False, **kwargs):
         if not avoid_download:
             self.download_partitions(file_setting_id, path)
+
         local_base_path = self.complete_path(file_setting_id=file_setting_id, path=path)
         if local_base_path not in self.open_base_store or not self.open_base_store[local_base_path]['open']:
 
@@ -129,6 +130,7 @@ class FilesStore:
 
         s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
         local_base_path = self.complete_path(file_setting_id, path=path)
+
         metadata_file_name = self.files_settings[file_setting_id]['metadata_file_name']
         s3_metadata_path = os.path.join(s3_base_path, metadata_file_name)
         local_metadata_path = os.path.join(local_base_path, metadata_file_name)
@@ -138,8 +140,9 @@ class FilesStore:
             **self.files_settings[file_setting_id]
         )
 
-        if (local_metadata_path in self.last_modified_date
-                and self.last_modified_date[local_metadata_path] == last_modified_date):
+        if local_metadata_path in self.last_modified_date and (
+                self.last_modified_date[local_metadata_path] == last_modified_date
+        ):
             return None
 
         self.last_modified_date[local_metadata_path] = last_modified_date

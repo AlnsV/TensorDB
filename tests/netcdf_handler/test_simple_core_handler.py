@@ -8,6 +8,7 @@ from typing import Dict
 from store_core.netcdf_handler.core_handler import CoreSimpleHandler
 from store_core.utils import create_dummy_array
 from config_path.config_root_dir import TEST_DIR_CORE
+from store_core.netcdf_handler.attributes_utils import transform_saved_attribute
 
 
 def get_default_handler(first_write):
@@ -129,11 +130,12 @@ class TestSimpleCoreHandler:
         attributes = handler.get_attributes()
         dataset = netCDF4.Dataset(handler.path, mode='r')
 
-        assert np.all(np.array(dataset.attribute_1) == np.array(list(map(str, range(5)))))
+        attribute_1 = transform_saved_attribute('', dataset.attribute_1)
+        assert np.all(np.array(attribute_1) == np.array(list(map(str, range(5)))))
         assert dataset.attribute_2 == 0
         assert dataset.attribute_3 == '3'
 
-        assert np.all(np.array(dataset.attribute_1) == np.array(attributes['attribute_1']))
+        assert np.all(np.array(attribute_1) == np.array(attributes['attribute_1']))
         assert dataset.attribute_2 == attributes['attribute_2']
         assert dataset.attribute_3 == attributes['attribute_3']
 

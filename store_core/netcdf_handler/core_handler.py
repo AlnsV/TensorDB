@@ -8,6 +8,7 @@ from abc import abstractmethod
 from loguru import logger
 
 from .dims_handler import DimsHandler, get_positions_from_unsorted
+from .attributes_utils import get_attribute, get_all_attributes, save_attributes
 
 
 class BaseCoreHandler:
@@ -56,22 +57,12 @@ class BaseCoreHandler:
         pass
 
     def set_attributes(self, attributes: Dict[str, Any]):
-        dataset = netCDF4.Dataset(self.path, mode='a', format="NETCDF4")
-        dataset_group = dataset.groups.get(self.group, dataset)
-        dataset_group.setncatts(attributes)
-        dataset.close()
+        save_attributes(path=self.path, group=self.group, **attributes)
 
     def get_attributes(self) -> Dict[str, Any]:
-        dataset = netCDF4.Dataset(self.path, mode='r', format="NETCDF4")
-        dataset_group = dataset.groups.get(self.group, dataset)
-        d = dataset_group.__dict__.copy()
-        dataset.close()
-        return d
+        return get_all_attributes(path=self.path, group=self.group)
 
-    def get_computed_array(
-            self,
-    ) -> Union[xarray.DataArray, Dict[str, Union[xarray.DataArray, np.array]]]:
-
+    def get_computed_array(self) -> xarray.DataArray:
         data = xarray.open_dataarray(self.path, group=self.group)
         data_computed = data.compute()
         data.close()

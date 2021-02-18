@@ -77,13 +77,13 @@ class MetadataHandler(BaseMetadataHandler):
         self.partitions_metadata[partition.name] = {}
         self._partition_names = None
 
-        self.append_row_index(indexes, 0, *args, **kwargs)
+        self.append_index(indexes, 0, *args, **kwargs)
 
-    def append_row_index(self,
-                         indexes: np.array,
-                         internal_partition_pos: int = None,
-                         *args,
-                         **kwargs):
+    def append_index(self,
+                     indexes: np.array,
+                     internal_partition_pos: int = None,
+                     *args,
+                     **kwargs):
 
         if len(self.partition_names) == 0:
             raise Exception(f"You can't append data to an empty file")
@@ -155,9 +155,8 @@ class MetadataHandler(BaseMetadataHandler):
     def get_attribute(self, name, group: str = None, default: Any = None):
         return get_attribute(path=self.metadata_path, name=name, group=group, default=default)
 
-    def get_all_attributes(self,  group: str = None):
+    def get_all_attributes(self, group: str = None):
         return get_all_attributes(path=self.metadata_path, group=group)
 
     def save_attributes(self, group: str = None, **kwargs):
         save_attributes(path=self.metadata_path, group=group, **kwargs)
-

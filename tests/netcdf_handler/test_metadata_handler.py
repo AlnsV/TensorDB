@@ -69,7 +69,7 @@ class TestMetadataHandler:
         self.test_concat_new_partition()
         metadata_handler = get_default_metadata(False)
 
-        metadata_handler.append_row_index(
+        metadata_handler.append_index(
             np.array(['4', '5', '6', '7']),
         )
         partition_paths = metadata_handler.get_partition_paths()
