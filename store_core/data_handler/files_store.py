@@ -169,12 +169,12 @@ class FilesStore:
         for partition_name in new_metadata.partition_names:
             s3_partition_path = os.path.join(s3_base_path, partition_name)
             local_partition_path = os.path.join(local_base_path, partition_name)
-            if not self.is_updated(new_metadata, act_metadata, partition_name):
+            if not FilesStore.is_updated(new_metadata, act_metadata, partition_name):
                 self.close_store(file_setting_id, path, *args, **kwargs)
                 self.download_file(file_setting_id, s3_partition_path, local_partition_path)
 
-    def is_updated(self,
-                   new_metadata: BaseMetadataHandler,
+    @staticmethod
+    def is_updated(new_metadata: BaseMetadataHandler,
                    act_metadata: BaseMetadataHandler,
                    partition_name: str):
         if act_metadata is None:
