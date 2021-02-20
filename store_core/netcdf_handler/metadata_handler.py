@@ -47,6 +47,7 @@ class MetadataHandler(BaseMetadataHandler):
             if not avoid_load_index:
                 self.index = CoreNetcdfHandler.get_external_computed_array(self.metadata_path, 'index')
             self.partitions_metadata = self.get_attribute(name='partitions_metadata')
+            self.last_s3_modified_date = self.get_attribute(name='last_s3_modified_date')
 
     def _create_default_core_metadata_handler(self, group, first_write, dims_space=None):
         dims_space = dims_space
@@ -130,7 +131,10 @@ class MetadataHandler(BaseMetadataHandler):
         self.partitions_metadata = {}
 
     def save(self):
-        self.save_attributes(partitions_metadata=self.partitions_metadata)
+        self.save_attributes(
+            partitions_metadata=self.partitions_metadata,
+            last_s3_modified_date=self.last_s3_modified_date
+        )
         self._update_files(self.index, 'index')
         self.first_write = False
 

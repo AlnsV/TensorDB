@@ -29,7 +29,6 @@ class FilesStore:
 
         self.files_settings = files_settings
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
-        self.last_modified_date = {}
         self.data_handler = data_handler
         self.max_files_in_disk = max_files_in_disk
 
@@ -56,7 +55,7 @@ class FilesStore:
         if local_base_path not in self.open_base_store or not self.open_base_store[local_base_path]['open']:
 
             if len(self.open_base_store) + 1 > self.max_files_in_disk:
-                self._delete_excess_files([])
+                self._delete_excess_files()
 
             kwargs['base_path'] = local_base_path
             self.open_base_store[local_base_path] = {
@@ -115,6 +114,7 @@ class FilesStore:
         if 'store_data' in self.files_settings[file_setting_id]:
             return getattr(self, self.files_settings[file_setting_id]['store_data'])(new_data, *args, **kwargs)
 
+        logger.info("storing data")
         if 'last_modified_date' not in kwargs:
             kwargs['last_modified_date'] = pd.Timestamp.now()
 
@@ -127,6 +127,7 @@ class FilesStore:
     def download_partitions(self, file_setting_id: str, path: List[str] = None, *args, **kwargs):
         if self.s3_handler is None:
             return None
+        logger.info("in downloading")
 
         s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
         local_base_path = self.complete_path(file_setting_id, path=path)
@@ -135,30 +136,30 @@ class FilesStore:
         s3_metadata_path = os.path.join(s3_base_path, metadata_file_name)
         local_metadata_path = os.path.join(local_base_path, metadata_file_name)
 
+        self.close_store(file_setting_id, path, *args, **kwargs)
+
         last_modified_date = self.s3_handler.get_last_modified_date(
             s3_path=s3_metadata_path,
             **self.files_settings[file_setting_id]
         )
 
-        if local_metadata_path in self.last_modified_date and (
-                self.last_modified_date[local_metadata_path] == last_modified_date
-        ):
-            return None
-
-        self.last_modified_date[local_metadata_path] = last_modified_date
-
         act_metadata = None
-        self.close_store(file_setting_id, path, *args, **kwargs)
         if os.path.exists(local_metadata_path):
             act_metadata = self.metadata_handler(path=local_metadata_path,
                                                  base_path=local_base_path,
                                                  first_write=False,
                                                  metadata_file_name=metadata_file_name,
                                                  avoid_load_index=True)
+            logger.info(act_metadata.last_s3_modified_date)
+            logger.info(last_modified_date)
+            if act_metadata.last_s3_modified_date is not None and \
+                    act_metadata.last_s3_modified_date == last_modified_date:
+                logger.info("inside the if")
+                return
 
-        self.download_file(file_setting_id=file_setting_id,
-                           s3_path_file=s3_metadata_path,
-                           local_path=local_metadata_path)
+        self.s3_handler.download_file(s3_path=s3_metadata_path,
+                                      local_path=local_metadata_path,
+                                      **self.files_settings[file_setting_id])
 
         new_metadata = self.metadata_handler(path=local_metadata_path,
                                              base_path=local_base_path,
@@ -170,8 +171,9 @@ class FilesStore:
             s3_partition_path = os.path.join(s3_base_path, partition_name)
             local_partition_path = os.path.join(local_base_path, partition_name)
             if not FilesStore.is_updated(new_metadata, act_metadata, partition_name):
-                self.close_store(file_setting_id, path, *args, **kwargs)
-                self.download_file(file_setting_id, s3_partition_path, local_partition_path)
+                self.s3_handler.download_file(s3_path=s3_partition_path,
+                                              local_path=local_partition_path,
+                                              **self.files_settings[file_setting_id])
 
     @staticmethod
     def is_updated(new_metadata: BaseMetadataHandler,
@@ -195,16 +197,6 @@ class FilesStore:
 
         return act_date == new_date
 
-    def download_file(self, file_setting_id: str, s3_path_file: str, local_path: str):
-        self.s3_handler.download_file(s3_path=s3_path_file,
-                                      local_path=local_path,
-                                      **self.files_settings[file_setting_id])
-
-        self.last_modified_date[local_path] = self.s3_handler.get_last_modified_date(
-            s3_path=s3_path_file,
-            **self.files_settings[file_setting_id]
-        )
-
     def complete_path(self, file_setting_id: str, path: Union[List[str], str] = None, omit_base_path: bool = False):
         path = [file_setting_id] if path is None else path
         path = path if isinstance(path, list) else [path]
@@ -219,19 +211,52 @@ class FilesStore:
 
         complete_path = self.complete_path(file_setting_id, path)
         if complete_path in self.open_base_store:
-            modified_partitions = self.open_base_store[complete_path]['handler'].modified_partitions
+            modified_partitions = self.open_base_store[complete_path]['handler'].modified_partitions.copy()
             self.open_base_store[complete_path]['handler'].close()
             self.open_base_store[complete_path]['open'] = False
-            if self.s3_handler is not None and modified_partitions:
-                # update the modified files to s3
-                s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
-                local_base_path = self.complete_path(file_setting_id, path=path)
-                for partition_name in modified_partitions:
-                    self.s3_handler.upload_file(
-                        s3_path=os.path.join(s3_base_path, partition_name),
-                        local_path=os.path.join(local_base_path, partition_name),
-                        **self.files_settings[file_setting_id]
-                    )
+            self._upload_files(
+                file_setting_id=file_setting_id,
+                path=path,
+                modified_partitions=modified_partitions
+            )
+
+    def _upload_files(self,
+                      file_setting_id: str,
+                      path: Union[List[str], str],
+                      modified_partitions: set):
+
+        if self.s3_handler is None or len(modified_partitions) == 0:
+            return
+
+        s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
+        local_base_path = self.complete_path(file_setting_id, path=path)
+        metadata_file_name = self.files_settings[file_setting_id]['metadata_file_name']
+
+        modified_partitions.add(metadata_file_name)
+
+        # update the modified files to s3
+        for partition_name in modified_partitions:
+            self.s3_handler.upload_file(
+                s3_path=os.path.join(s3_base_path, partition_name),
+                local_path=os.path.join(local_base_path, partition_name),
+                **self.files_settings[file_setting_id]
+            )
+
+        last_modified_date = self.s3_handler.get_last_modified_date(
+            s3_path=os.path.join(s3_base_path, metadata_file_name),
+            **self.files_settings[file_setting_id]
+        )
+
+        # modify the metadata file saving the last modified date of s3, this will be useful to avoid
+        # that multiple services that share the same memory download the same metadata file again and again
+        metadata = self.metadata_handler(
+            path=os.path.join(local_base_path, metadata_file_name),
+            base_path=local_base_path,
+            first_write=False,
+            metadata_file_name=metadata_file_name,
+            avoid_load_index=True
+        )
+        metadata.save_attributes(last_s3_modified_date=last_modified_date)
 
     def delete_store(self, file_setting_id: str, path: Union[List[str], str] = None, *args, **kwargs):
         self.close_store(file_setting_id, path)
@@ -255,7 +280,8 @@ class FilesStore:
         for path in total_paths:
             os.remove(path)
 
-    def _delete_excess_files(self, exclude):
+    def _delete_excess_files(self, exclude: List[str] = None):
+        exclude = [] if exclude is None else exclude
         act_date = pd.Timestamp.now()
         stores_to_delete = {
             k: ((act_date - v['first_read_date']).days + 1) / v['num_use']

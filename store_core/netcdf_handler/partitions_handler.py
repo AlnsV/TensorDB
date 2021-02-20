@@ -108,7 +108,6 @@ class PartitionsStore(BaseStore):
                 self.last_partition.append_data(new_data)
                 self.metadata.append_index(new_data.coords['index'].values, *args, **kwargs)
                 self.modified_partitions.add(self.last_partition.name)
-                self.modified_partitions.add(self.metadata.metadata_file_name)
 
             self.cached_data = []
 
@@ -128,7 +127,6 @@ class PartitionsStore(BaseStore):
             **kwargs
         )
         self.modified_partitions.add(new_partition.name)
-        self.modified_partitions.add(self.metadata.metadata_file_name)
 
     def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()

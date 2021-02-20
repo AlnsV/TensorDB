@@ -15,6 +15,7 @@ class BaseMetadataHandler:
         self.first_write = first_write
         self.partitions_metadata: Dict[str, Dict[str, Any]] = {}
         self._partition_names: List[str] = None
+        self.last_s3_modified_date = None
 
     @property
     def partition_names(self):

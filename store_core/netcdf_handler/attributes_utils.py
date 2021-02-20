@@ -44,6 +44,8 @@ def transform_saved_attribute(key: str, attribute: Any):
         return bool(attribute)
     if attribute == 'nan':
         return np.nan
+    if attribute == 'None':
+        return None
     if "date" in key:
         return pd.to_datetime(attribute)
 
