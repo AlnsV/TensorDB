@@ -11,6 +11,23 @@ from config_path.config_root_dir import ROOT_DIR
 from store_core.netcdf_handler.metadata_handler import MetadataHandler, BaseMetadataHandler
 
 
+"""
+    FilesStore
+    ----------
+    It's a kind of SGBD based on files (not necessary the same type of file). It provide a set of basic methods
+    that include append, update, store and retrieve data, all these methods are combined with a backup using S3. 
+    
+    It was designed with the idea of being an inheritable class, so if there is a file that need a special 
+    treatment, it will be possible to create a new method that handle that specific file
+    
+    This class does not handle any kind of concurrency in term of writes, so the user must be the one that 
+    coordinate the writes
+    
+    The best actual (and the default) way to use this class is using the PartitionsHandler class, basically
+    a set of partitioned netcdf4 files
+"""
+
+
 class FilesStore:
     def __init__(self,
                  files_settings: Dict[str, Dict[str, Any]],
@@ -114,7 +131,6 @@ class FilesStore:
         if 'store_data' in self.files_settings[file_setting_id]:
             return getattr(self, self.files_settings[file_setting_id]['store_data'])(new_data, *args, **kwargs)
 
-        logger.info("storing data")
         if 'last_modified_date' not in kwargs:
             kwargs['last_modified_date'] = pd.Timestamp.now()
 
@@ -127,7 +143,6 @@ class FilesStore:
     def download_partitions(self, file_setting_id: str, path: List[str] = None, *args, **kwargs):
         if self.s3_handler is None:
             return None
-        logger.info("in downloading")
 
         s3_base_path = self.complete_path(file_setting_id, path=path, omit_base_path=True)
         local_base_path = self.complete_path(file_setting_id, path=path)
@@ -150,11 +165,9 @@ class FilesStore:
                                                  first_write=False,
                                                  metadata_file_name=metadata_file_name,
                                                  avoid_load_index=True)
-            logger.info(act_metadata.last_s3_modified_date)
-            logger.info(last_modified_date)
+
             if act_metadata.last_s3_modified_date is not None and \
                     act_metadata.last_s3_modified_date == last_modified_date:
-                logger.info("inside the if")
                 return
 
         self.s3_handler.download_file(s3_path=s3_metadata_path,

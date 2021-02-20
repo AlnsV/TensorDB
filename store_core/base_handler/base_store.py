@@ -2,6 +2,7 @@ import xarray
 from abc import abstractmethod
 from typing import Dict, List, Any, Union, Callable, Generic
 from store_core.netcdf_handler.dims_handler import DimsHandler
+from store_core.base_handler.base_metadata_handler import BaseMetadataHandler
 
 
 class BaseStore:
@@ -16,6 +17,7 @@ class BaseStore:
                  *args,
                  **kwargs):
         self.base_path = base_path
+        self.metadata: BaseMetadataHandler = None
         self.dims_handler = DimsHandler(
             coords={},
             dims=dims,

@@ -1,9 +1,12 @@
 import xarray
 import os
-import pandas as pd
+import numpy as np
 
 from abc import abstractmethod
 from typing import Dict, List, Any, Union
+
+"""
+"""
 
 
 class BaseMetadataHandler:
@@ -20,8 +23,10 @@ class BaseMetadataHandler:
     @property
     def partition_names(self):
         if self._partition_names is None:
-            self._partition_names = [name for name in self.partitions_metadata.keys()
-                                     if name != self.metadata_file_name]
+            self._partition_names = [
+                name for name in self.partitions_metadata.keys()
+                if name != self.metadata_file_name
+            ]
         return self._partition_names
 
     @abstractmethod
@@ -36,4 +41,22 @@ class BaseMetadataHandler:
     def close(self):
         pass
 
+    @abstractmethod
+    def get_partition_path(self, partition_id: Union[int, str]) -> str:
+        pass
 
+    @abstractmethod
+    def get_partition_paths(self) -> List[str]:
+        pass
+
+    @abstractmethod
+    def get_attribute(self, name, group: str = None, default: Any = None):
+        pass
+
+    @abstractmethod
+    def get_all_attributes(self, group: str = None):
+        pass
+
+    @abstractmethod
+    def save_attributes(self, group: str = None, **kwargs):
+        pass

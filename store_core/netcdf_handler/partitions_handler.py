@@ -11,6 +11,19 @@ from store_core.netcdf_handler.metadata_handler import MetadataHandler
 from store_core.utils import modify_coord_dtype
 
 
+"""
+    PartitionsStore
+    ---------------
+    It's a simple handler for partitioned xarray. 
+    Provide a set of method to efficiently append, store, update and retrieve data from some xarray 
+    supported file format, combined with that it has a metadata handler which provide a set of useful
+    functions to handle the data and check for the integrity of the data
+    
+    
+    
+"""
+
+
 class PartitionsStore(BaseStore):
     def __init__(self,
                  dims_conversion: Dict[str, str] = None,
