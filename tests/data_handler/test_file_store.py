@@ -41,7 +41,6 @@ def get_default_file_store():
 class TestFileStore:
     def test_store_data(self):
         file_store = get_default_file_store()
-        import os
         arr = create_dummy_array(10, 10)
         file_store.store_data(arr, 'data_one')
         assert compare_dataset(file_store.get_dataset('data_one'), arr)
@@ -77,8 +76,8 @@ class TestFileStore:
 
 if __name__ == "__main__":
     test = TestFileStore()
-    # test.test_store_data()
+    test.test_store_data()
     # test.test_update_data()
-    test.test_append_data()
+    # test.test_append_data()
 
 
