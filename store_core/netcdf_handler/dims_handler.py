@@ -1,5 +1,6 @@
 import xarray
 import numpy as np
+import pandas as pd
 import netCDF4
 
 from typing import Dict, List, Any, Union
@@ -7,11 +8,27 @@ from pandas.api.types import is_numeric_dtype
 from loguru import logger
 
 
-def get_positions_from_unsorted(x, y):
-    x_sorted = np.argsort(x)
-    y_pos = np.searchsorted(x[x_sorted], y)
-    indices = x_sorted[y_pos]
-    return indices
+class DtypeFreeDimsHandler:
+    def __init__(self, free_value: Any):
+        self.free_value = free_value
+        if isinstance(free_value, DtypeFreeDimsHandler):
+            self.free_value = free_value.free_value
+
+    def __add__(self, increment: Any):
+        if isinstance(self.free_value, pd.Timestamp):
+            return self.free_value + pd.DateOffset(increment)
+        if isinstance(self.free_value, str):
+            return self.free_value + str(increment)
+        return self.free_value + increment
+
+    def is_free(self, other: Any):
+        return self.free_value <= other
+
+    def __str__(self):
+        return f"{self.free_value}"
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class DimsHandler:
@@ -19,8 +36,8 @@ class DimsHandler:
                  coords: Dict[str, np.ndarray],
                  dims: List[str],
                  dims_type: Dict[str, str],
+                 default_free_values: Dict[str, Any] = None,
                  dims_space: Dict[str, Union[float, int]] = None,
-                 default_free_value: Any = None,
                  concat_dim: str = 'index',
                  *args,
                  **kwargs):
@@ -29,9 +46,12 @@ class DimsHandler:
         self._coords = {dim: coords.get(dim, np.array([])) for dim in dims}
         self._dims_space = {} if dims_space is None else dims_space
         self._dims_type = {} if dims_type is None else dims_type
-        self._default_free_value = default_free_value
-        if self._default_free_value is not None and not isinstance(self._default_free_value, dict):
-            self._default_free_value = {dim: self._default_free_value for dim in self._dims}
+        self._default_free_values: Dict[str, DtypeFreeDimsHandler] = {}
+        if default_free_values is not None:
+            self._default_free_values = {
+                k: DtypeFreeDimsHandler(val)
+                for k, val in default_free_values.items()
+            }
 
         self._is_static = np.all([self.is_dim_static(dim) for dim in self._dims])
         self._free_sizes = {}
@@ -74,8 +94,8 @@ class DimsHandler:
         return self._concat_dim
 
     @property
-    def default_free_value(self):
-        return self._default_free_value
+    def default_free_values(self):
+        return self._default_free_values
 
     @property
     def used_coords(self):
@@ -85,22 +105,12 @@ class DimsHandler:
         }
 
     def is_free(self, element: Any, dim: str):
-        if self._default_free_value is None:
+        if dim not in self._default_free_values:
             return False
+        return self._default_free_values[dim].is_free(element)
 
-        if isinstance(element, str):
-            return self._default_free_value[dim] in element
-
-        return self._default_free_value[dim] == element
-
-    def create_free_value(self, element: Any, dim: str):
-        if self._default_free_value is None:
-            return element
-
-        if isinstance(element, str):
-            return self._default_free_value[dim] + element
-
-        return self.default_free_value
+    def create_free_value(self, increment: Any, dim: str):
+        return self._default_free_values[dim] + increment
 
     def _update_free_sizes(self, dims: Union[str, List[str]]):
         dims = dims
@@ -112,22 +122,50 @@ class DimsHandler:
             if self.is_dim_static(dim):
                 self._free_sizes[dim] = sum(self.is_free(val, dim) for val in self._coords[dim])
 
-    def _concat_fixed_free_coord(self, dim: str) -> np.array:
-        coord = self._coords[dim]
-        free_space = [self.create_free_value(str(i), dim) for i in range(self._dims_space[dim] - len(coord))]
+    def _concat_percentage_unique_free_coord(self, dim: str) -> np.array:
+        coord = self._coords[dim][[not self.is_free(v, dim) for v in self._coords[dim]]]
+        free_space = [
+            self.create_free_value(i, dim)
+            for i in range(int(len(coord) * self._dims_space[dim]))
+        ]
         return np.concatenate([coord, free_space])
 
-    def _concat_percentage_free_coord(self, dim: str) -> np.array:
+    def _concat_percentage_nonunique_free_coord(self, dim: str) -> np.array:
         coord = self._coords[dim][[not self.is_free(v, dim) for v in self._coords[dim]]]
-        free_space = [self.create_free_value(str(i), dim) for i in range(int(len(coord) * self._dims_space[dim]))]
+        free_space = [
+            self.create_free_value(0, dim)
+            for i in range(int(len(coord) * self._dims_space[dim]))
+        ]
         return np.concatenate([coord, free_space])
+
+    def _concat_fixed_unique_free_coord(self, dim: str) -> np.array:
+        free_space = [
+            self.create_free_value(i, dim)
+            for i in range(self._dims_space[dim] - len(self._coords[dim]))
+        ]
+        return np.concatenate([self._coords[dim], free_space])
+
+    def _concat_fixed_nonunique_free_coord(self, dim: str) -> np.array:
+        free_space = [
+            self.create_free_value(0, dim)
+            for _ in range(self._dims_space[dim] - len(self._coords[dim]))
+        ]
+        return np.concatenate([self._coords[dim], free_space])
 
     def concat_free_coords(self):
         for dim in self._dims:
-            if self._dims_type[dim] == 'fixed':
-                self._coords[dim] = self._concat_fixed_free_coord(dim)
+            if self._dims_type[dim] == 'simple':
+                continue
+            elif self._dims_type[dim] == 'fixed':
+                self._coords[dim] = self._concat_fixed_nonunique_free_coord(dim)
+            elif self._dims_type[dim] == 'fixed_unique':
+                self._coords[dim] = self._concat_fixed_unique_free_coord(dim)
             elif self._dims_type[dim] == 'percentage':
-                self._coords[dim] = self._concat_percentage_free_coord(dim)
+                self._coords[dim] = self._concat_percentage_nonunique_free_coord(dim)
+            elif self._dims_type[dim] == 'percentage_unique':
+                self._coords[dim] = self._concat_percentage_unique_free_coord(dim)
+            else:
+                raise NotImplemented(f"The option {self._dims_type[dim]} is not implemented")
 
             self._sizes[dim] = len(self._coords[dim])
             self._update_free_sizes(dim)
@@ -143,28 +181,43 @@ class DimsHandler:
         return coords
 
     def is_dim_static(self, dim):
-        return self._dims_type[dim] in ['fixed', 'percentage']
+        return self.is_dim_fixed(dim) or self.is_dim_percentage(dim)
+
+    def is_dim_fixed(self, dim):
+        return 'fixed' in self._dims_type[dim]
+
+    def is_dim_percentage(self, dim):
+        return 'percentage' in self._dims_type[dim]
 
     def is_appendable(self, new_coords) -> bool:
         for dim in self._dims:
             if dim not in new_coords:
                 continue
 
-            if self._dims_type[dim] == 'fixed' and len(new_coords[dim]) > self.free_sizes[dim]:
-                raise OverflowError(f"You are appending {len(new_coords[dim])} new elements "
-                                    f"to the fixed dimension {dim} and there are only {self.free_sizes[dim]} "
-                                    f"free positions")
+            if self.is_dim_fixed(dim) and len(new_coords[dim]) > self.free_sizes[dim]:
+                raise OverflowError(
+                    f"You are appending {len(new_coords[dim])} new elements "
+                    f"to the fixed dimension {dim} and there are only {self.free_sizes[dim]} "
+                    f"free positions"
+                )
 
-            if self._dims_type[dim] == 'percentage' and len(new_coords[dim]) > self.free_sizes[dim]:
+            if self.is_dim_percentage(dim) and len(new_coords[dim]) > self.free_sizes[dim]:
                 return False
 
         return True
 
     def is_complete(self):
         for dim in self.dims:
-            if self._dims_type[dim] == 'fixed' and self.free_sizes[dim] > 0:
+            if self.is_dim_fixed(dim) and self.free_sizes[dim] > 0:
                 return False
         return True
+
+    @staticmethod
+    def get_positions_from_unsorted(x, y):
+        x_sorted = np.argsort(x)
+        y_pos = np.searchsorted(x[x_sorted], y)
+        indices = x_sorted[y_pos]
+        return indices
 
     def get_positions_coords(self, coords) -> Dict[str, np.array]:
         coords_pos = {}
@@ -174,12 +227,15 @@ class DimsHandler:
             if isinstance(coord, xarray.DataArray):
                 coord = coord.values
 
-            if np.all(self._coords[dim][:-1] <= self._coords[dim][1:]):
-                coords_pos[dim] = np.searchsorted(self._coords[dim], coord)
-            else:
-                coords_pos[dim] = get_positions_from_unsorted(self._coords[dim], coord)
+            coords_pos[dim] = DimsHandler.get_positions_coord(self._coords[dim], coord)
 
         return coords_pos
+
+    @staticmethod
+    def get_positions_coord(x, y):
+        if np.all(x[:-1] <= x[1:]):
+            return np.searchsorted(x, y)
+        return DimsHandler.get_positions_from_unsorted(x, y)
 
     def get_new_coords(self, coords_to_append: Union[Dict[str, np.array]]):
         new_coords = {}
@@ -214,5 +270,4 @@ class DimsHandler:
 
             self._update_free_sizes(dim)
             self._sizes[dim] = len(self._coords[dim])
-
 

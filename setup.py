@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='BC2-DATA',
+    name='File DB',
     version='2.0',
     description='File system storage based in xarray',
     author='Joseph Nowak',

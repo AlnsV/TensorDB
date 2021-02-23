@@ -11,24 +11,27 @@ from config_path.config_root_dir import ROOT_DIR
 from store_core.netcdf_handler.metadata_handler import MetadataHandler, BaseMetadataHandler
 
 
-"""
-    FilesStore
-    ----------
-    It's a kind of SGBD based on files (not necessary the same type of file). It provide a set of basic methods
-    that include append, update, store and retrieve data, all these methods are combined with a backup using S3. 
-    
-    It was designed with the idea of being an inheritable class, so if there is a file that need a special 
-    treatment, it will be possible to create a new method that handle that specific file
-    
-    This class does not handle any kind of concurrency in term of writes, so the user must be the one that 
-    coordinate the writes
-    
-    The best actual (and the default) way to use this class is using the PartitionsHandler class, basically
-    a set of partitioned netcdf4 files
-"""
-
-
 class FilesStore:
+
+    """
+        FilesStore
+        ----------
+        It's a kind of SGBD based on files (not necessary the same type of file). It provide a set of basic methods
+        that include append, update, store and retrieve data, all these methods are combined with a backup using S3.
+
+        It was designed with the idea of being an inheritable class, so if there is a file that need a special
+        treatment, it will be possible to create a new method that handle that specific file
+
+        Notes
+        -----
+        1) This class does not handle any kind of concurrency or syncronization between multiples process reading
+        and writing, but of course depeneding in the internal handler of every file it can read or write using multiple
+        cores
+
+        2) The actual recommend option to handle the files is using the class called PartitionsStore and netcdf4 format
+    """
+
+
     def __init__(self,
                  files_settings: Dict[str, Dict[str, Any]],
                  data_handler: Callable[[BaseStore], BaseStore],
@@ -40,10 +43,11 @@ class FilesStore:
                  *args,
                  **kwargs):
 
-        self.base_path = base_path
-        if self.base_path is None:
-            self.base_path = os.path.join(ROOT_DIR, 'file_db')
+        """
 
+        """
+
+        self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
         self.files_settings = files_settings
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
         self.data_handler = data_handler

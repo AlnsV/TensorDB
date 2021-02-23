@@ -34,10 +34,12 @@ class MetadataHandler(BaseMetadataHandler):
 
     def __init__(self,
                  avoid_load_index: bool = False,
+                 first_write: bool = False,
+                 metadata_file_name: str = "metadata.nc",
                  *args,
                  **kwargs):
 
-        super().__init__(*args, **kwargs)
+        super().__init__(first_write=first_write, metadata_file_name=metadata_file_name, *args, **kwargs)
 
         if self.first_write:
             # create an empty file
@@ -58,7 +60,7 @@ class MetadataHandler(BaseMetadataHandler):
             group=group,
             dims=['index', 'columns'],
             dims_space=dims_space,
-            dims_type={'index': 'dynamic', 'columns': 'fixed'},
+            dims_type={'index': 'dynamic', 'columns': 'simple'},
             first_write=first_write
         )
 

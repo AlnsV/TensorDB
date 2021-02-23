@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Union
 from abc import abstractmethod
 from loguru import logger
 
-from .dims_handler import DimsHandler, get_positions_from_unsorted
+from .dims_handler import DimsHandler
 from .attributes_utils import get_attribute, get_all_attributes, save_attributes
 
 
@@ -18,7 +18,7 @@ class BaseCoreHandler:
                  dims: List[str],
                  dims_type: Dict[str, str],
                  dims_space: Dict[str, Union[float, int]],
-                 default_free_value: Any = None,
+                 default_free_values: Any = None,
                  concat_dim: str = "index",
                  group: str = None,
                  first_write: bool = False,
@@ -34,7 +34,7 @@ class BaseCoreHandler:
             dims=dims,
             dims_space=dims_space,
             dims_type=dims_type,
-            default_free_value=default_free_value,
+            default_free_values=default_free_values,
             concat_dim=concat_dim
         )
 
@@ -64,7 +64,7 @@ class BaseCoreHandler:
 
     def get_computed_array(self) -> xarray.DataArray:
         data = xarray.open_dataarray(self.path, group=self.group)
-        data_computed = data.compute()
+        data_computed = self.filter_free_coords(data).compute()
         data.close()
         return data_computed
 
@@ -93,16 +93,24 @@ class BaseCoreHandler:
 
         return descriptors
 
+    def filter_free_coords(self, data):
+        used_coords = self.dims_handler.used_coords
+        return data.isel(
+            {
+                dim: self.dims_handler.get_positions_coord(
+                    coord.values,
+                    used_coords[dim]
+                )
+                for dim, coord in data.coords.items()
+            }
+        )
+
     @staticmethod
     def get_external_computed_array(path: str, group: str = None) -> xarray.DataArray:
         data = xarray.open_dataarray(path, group=group)
         data_computed = data.compute()
         data.close()
         return data_computed
-
-    @staticmethod
-    def coords_to_string(data: xarray.DataArray):
-        return data.assign_coords({key: coord.astype(str) for key, coord in data.coords.items()})
 
 
 class CoreNetcdfHandler(BaseCoreHandler):
@@ -117,8 +125,6 @@ class CoreNetcdfHandler(BaseCoreHandler):
         self._write_file(new_data, 'a')
 
     def _write_file(self, new_data, mode):
-        new_data = CoreNetcdfHandler.coords_to_string(new_data)
-
         # TODO: Add a validation in case that the data is bigger than the fixed dimensions
 
         # update the coords
@@ -127,26 +133,16 @@ class CoreNetcdfHandler(BaseCoreHandler):
         if not self._is_data_complete(new_data):
             new_data = self._concat_extra_space(new_data)
 
-        new_data.to_netcdf(self.path,
-                           mode=mode,
-                           group=self.group,
-                           unlimited_dims=self.dims_handler.get_dims('dynamic'))
+        new_data.to_netcdf(
+            self.path,
+            mode=mode,
+            group=self.group,
+            unlimited_dims=self.dims_handler.get_dims('dynamic')
+        )
 
     def _concat_extra_space(self, data):
         self.dims_handler.concat_free_coords()
-
-        data = xarray.concat(
-            [
-                data,
-                xarray.DataArray(
-                    self.default_value,
-                    dims=self.dims_handler.dims,
-                    coords=self.dims_handler.filter_free_coords({self.dims_handler.concat_dim})
-                )
-            ],
-            dim=self.dims_handler.concat_dim
-        )
-
+        data = data.reindex(indexers=self.dims_handler.coords, fill_value=self.default_value)
         return data
 
     def append_data(self, new_data: xarray.DataArray):
@@ -155,8 +151,6 @@ class CoreNetcdfHandler(BaseCoreHandler):
             dataset.close()
             self.write_as_new_group(new_data)
             return
-
-        new_data = CoreNetcdfHandler.coords_to_string(new_data)
 
         new_coords = self.dims_handler.get_new_coords(new_data.coords)
 
@@ -193,14 +187,14 @@ class CoreNetcdfHandler(BaseCoreHandler):
 
     def _is_data_complete(self, data: xarray.DataArray):
         for dim in self.dims_handler.dims:
-            if self.dims_handler.dims_type[dim] == 'fixed' and data.sizes[dim] < self.dims_handler.dims_space[dim]:
+            if self.dims_handler.is_dim_fixed(dim) and data.sizes[dim] < self.dims_handler.dims_space[dim]:
                 return False
         return True
 
     def update_data(self, new_data: xarray.DataArray):
         dataset = netCDF4.Dataset(self.path, mode='a', format="NETCDF4")
         dataset_group = dataset.groups.get(self.group, dataset)
-        self._update_file(dataset_group, CoreNetcdfHandler.coords_to_string(new_data))
+        self._update_file(dataset_group, new_data)
         dataset.close()
 
     def _update_file(self,
@@ -250,12 +244,7 @@ class CoreSimpleHandler(CoreNetcdfHandler):
     def _update_file(self, dataset: netCDF4.Dataset, data: xarray.DataArray):
         coords = self.get_computed_coords()
         total_positions = tuple(
-            get_positions_from_unsorted(coord, data.coords[dim].values)
+            DimsHandler.get_positions_from_unsorted(coord, data.coords[dim].values)
             for dim, coord in coords.items()
         )
         dataset.variables['__xarray_dataarray_variable__'][total_positions] = data
-
-
-
-
-

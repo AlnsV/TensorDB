@@ -9,16 +9,15 @@ from config_path.config_root_dir import TEST_DIR_PARTITIONS
 
 
 class TestPartitionsHandler:
-    # d
     def test_write_new_partitions(self):
-        for handler in [CoreSimpleHandler, CoreNetcdfHandler]:
+        for handler in [CoreNetcdfHandler, CoreSimpleHandler]:
             partitions_store = PartitionsStore(
                 base_path=TEST_DIR_PARTITIONS + '/creation',
                 dims=['index', 'columns'],
                 dims_type={'index': 'fixed', 'columns': 'percentage'},
                 dims_space={'index': 5, 'columns': 0.1},
                 first_write=True,
-                default_free_value='free',
+                default_free_values={'index': 'free', 'columns': 'free'},
                 core_handler=handler
             )
             arr = create_dummy_array(10, 10)
@@ -49,7 +48,7 @@ class TestPartitionsHandler:
                 dims_space={'index': 5, 'columns': 0.1},
                 first_write=True,
                 max_cached_data=5,
-                default_free_value='free',
+                default_free_values={'index': 'free', 'columns': 'free'},
                 core_handler=handler
             )
             arr = create_dummy_array(9, 10)
@@ -76,7 +75,7 @@ class TestPartitionsHandler:
                 dims_space={'index': 5, 'columns': 0.1},
                 first_write=True,
                 max_cached_data=5,
-                default_free_value='free',
+                default_free_values={'index': 'free', 'columns': 'free'},
                 core_handler=handler
             )
             arr = create_dummy_array(16, 10)
@@ -100,7 +99,7 @@ class TestPartitionsHandler:
                 dims_space={'index': 5, 'columns': 0.1},
                 first_write=False,
                 max_cached_data=5,
-                default_free_value='free',
+                default_free_values={'index': 'free', 'columns': 'free'},
                 core_handler=handler
             )
             arr = create_dummy_array(16, 10)
@@ -116,7 +115,7 @@ class TestPartitionsHandler:
 
 if __name__ == "__main__":
     test = TestPartitionsHandler()
-    # test.test_write_new_partitions()
+    test.test_write_new_partitions()
     # test.test_append_data()
     # test.test_store_data()
-    test.test_update_data()
+    # test.test_update_data()

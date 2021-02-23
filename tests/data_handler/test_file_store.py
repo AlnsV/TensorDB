@@ -11,7 +11,7 @@ def get_default_file_store():
         'dims': ['index', 'columns'],
         'dims_type': {'index': 'fixed', 'columns': 'percentage'},
         'dims_space': {'index': 5, 'columns': 0.1},
-        'default_free_value': "free",
+        'default_free_values': {'index': 'free', 'columns': 'free'},
         'metadata_file_name': 'metadata.nc',
         'bucket_name': 'test.bitacore.data.2.0'
     }
@@ -61,7 +61,6 @@ class TestFileStore:
 
     def test_append_data(self):
         self.test_store_data()
-        logger.info("over here")
         file_store = get_default_file_store()
 
         arr = create_dummy_array(20, 10)

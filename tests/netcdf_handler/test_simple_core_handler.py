@@ -142,12 +142,12 @@ class TestSimpleCoreHandler:
 
 if __name__ == "__main__":
     test = TestSimpleCoreHandler()
-    # test.test_write_file()
+    test.test_write_file()
     # test.test_append_data()
     # test.test_append_with_rewrite()
     # test.test_append_with_perfect_rewrite()
     # test.test_update_data()
-    test.test_attributes()
+    # test.test_attributes()
 
 
 

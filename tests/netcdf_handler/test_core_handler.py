@@ -17,10 +17,10 @@ def get_default_handler(first_write):
     return CoreNetcdfHandler(
         path=path,
         dims=['index', 'columns'],
-        dims_type={'index': 'fixed', 'columns': 'percentage'},
+        dims_type={'index': 'fixed', 'columns': 'percentage_unique'},
         dims_space={'index': 10, 'columns': 0.4},
         first_write=first_write,
-        default_free_value="free"
+        default_free_values={'index': 'free', 'columns': 'free'}
     )
 
 
@@ -54,7 +54,9 @@ class TestCoreHandler:
         assert len(arr.coords['columns']) == expected_sizes['columns']
         assert free_sizes['index'] == expected_free_sizes['index']
         assert free_sizes['columns'] == expected_free_sizes['columns']
-        assert arr.sel(new_arr.coords).equals(new_arr)
+        filter_arr = handler.filter_free_coords(arr)
+
+        assert filter_arr.sel(new_arr.coords).equals(new_arr)
 
         arr.close()
 

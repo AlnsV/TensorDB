@@ -11,45 +11,51 @@ from store_core.netcdf_handler.metadata_handler import MetadataHandler
 from store_core.utils import modify_coord_dtype
 
 
-"""
+class PartitionsStore(BaseStore):
+    """
     PartitionsStore
     ---------------
-    It's a simple handler for partitioned xarray. 
-    Provide a set of method to efficiently append, store, update and retrieve data from some xarray 
+    It's a simple handler for partitioned xarray.
+
+    Provide a set of method to efficiently append, store, update and retrieve data from some xarray
     supported file format, combined with that it has a metadata handler which provide a set of useful
-    functions to handle the data and check for the integrity of the data
-    
-    
-    
-"""
+    functions to handle and check for the integrity of the data
+
+    Internally it handle every partition using another handler, so this can be seen as a handler of handlers
 
 
-class PartitionsStore(BaseStore):
+    Attributes
+    ----------
+    metadata: Handle the metadata file
+    default_value: Indicate the value in case of missing data for all the partitions (probably will be in other part)
+    max_cached_data: Indicate the max number of appends that can be preserved in memory before being writed
+        to the file
+    core_handler: Internal handle for every partition, this control how the writes/reads/append happen
+    dataset: It's an xarray Dataset which handle all the partitions as unique array, so this is used to read
+    dims_conversion: This will be deleted in the future
+    modified_partitions: Save the names of all the modified partitions, this is helpful to know what partitions
+        needs a backup
+
+    Methods
+    -------
+
+    """
     def __init__(self,
                  dims_conversion: Dict[str, str] = None,
                  default_value: Any = np.nan,
                  max_cached_data: int = 0,
                  core_handler: Union[Callable[[BaseCoreHandler], BaseCoreHandler], str] = None,
-                 first_write: bool = False,
-                 metadata_file_name: str = "metadata.nc",
                  *args,
                  **kwargs):
 
         super().__init__(*args, **kwargs)
-
-        self.metadata = MetadataHandler(
-            first_write=first_write,
-            metadata_file_name=metadata_file_name,
-            *args,
-            **kwargs
-        )
-
+        self.metadata = MetadataHandler(*args, **kwargs)
         self.default_value = default_value
-        self.cached_data = []
+        self._cached_data = []
         self.modified_partitions = set()
         self._last_partition = None
         self._last_partition_name = None
-        self.dataset = None
+        self.dataset: xarray.Dataset = None
         self.dims_conversion = dims_conversion
         self.max_cached_data = max_cached_data
         self.core_handler = core_handler
@@ -61,7 +67,7 @@ class PartitionsStore(BaseStore):
         self.count_writes = 0
 
     @property
-    def index(self):
+    def index(self) -> xarray.DataArray:
         if self.dims_conversion is not None:
             concat_dim = self.dims_handler.concat_dim
             return self.metadata.index.assign_coords({
@@ -92,7 +98,7 @@ class PartitionsStore(BaseStore):
             dims_type=self.dims_handler.dims_type,
             concat_dim=self.dims_handler.concat_dim,
             default_value=self.default_value,
-            default_free_value=self.dims_handler.default_free_value,
+            default_free_values=self.dims_handler.default_free_values,
             first_write=first_write,
             *args,
             **kwargs
@@ -102,18 +108,18 @@ class PartitionsStore(BaseStore):
         self.close_dataset()
 
         if new_data is not None:
-            self.cached_data.append(new_data)
+            self._cached_data.append(new_data)
 
         # TODO: Improve this condition
         if (
                 force_write or
-                len(self.cached_data) >= self.max_cached_data or
+                len(self._cached_data) >= self.max_cached_data or
                 (
                     not self.metadata.empty and
-                    self.last_partition.dims_handler.free_sizes[self.dims_handler.concat_dim] == len(self.cached_data)
+                    self.last_partition.dims_handler.free_sizes[self.dims_handler.concat_dim] == len(self._cached_data)
                 )
         ):
-            new_data = xarray.concat(self.cached_data, dim=self.dims_handler.concat_dim)
+            new_data = xarray.concat(self._cached_data, dim=self.dims_handler.concat_dim)
             self.count_writes += 1
             if self.metadata.empty or self.last_partition.dims_handler.is_complete():
                 self.write_new_partition(new_data)
@@ -122,7 +128,7 @@ class PartitionsStore(BaseStore):
                 self.metadata.append_index(new_data.coords['index'].values, *args, **kwargs)
                 self.modified_partitions.add(self.last_partition.name)
 
-            self.cached_data = []
+            self._cached_data = []
 
     def write_new_partition(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
@@ -174,22 +180,21 @@ class PartitionsStore(BaseStore):
             combine='nested'
         )
 
-        if self.dims_handler.default_free_value is not None:
-            self.dataset = self.dataset.sel({
-                dim: [not self.dims_handler.is_free(val, dim) for val in coord.values]
+        # filter the free data
+        self.dataset = self.dataset.isel(
+            {
+                dim: self.dims_handler.get_positions_coord(
+                    coord.values,
+                    np.array([v for v in coord.values if not self.dims_handler.is_free(v, dim)])
+                )
                 for dim, coord in self.dataset.coords.items()
-            })
-
-        if self.dims_conversion is not None:
-            self.dataset = self.dataset.assign_coords({
-                name: modify_coord_dtype(coord.values, self.dims_conversion[name])
-                for name, coord in self.dataset.coords.items()
-            })
+            }
+        )
 
         return self.dataset
 
     def save(self):
-        if len(self.cached_data):
+        if len(self._cached_data):
             self.append_data(None, True)
         self.close_dataset()
         self.metadata.save()

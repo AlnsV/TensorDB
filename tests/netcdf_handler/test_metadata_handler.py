@@ -35,7 +35,8 @@ def get_default_handler(path, first_write):
         dims=['index', 'columns'],
         dims_type={'index': 'fixed', 'columns': 'percentage'},
         dims_space={'index': 10, 'columns': 0.4},
-        first_write=first_write
+        first_write=first_write,
+        default_free_values={'index': 'free', 'columns': 'free'}
     )
 
 
