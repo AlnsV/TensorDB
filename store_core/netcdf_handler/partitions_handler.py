@@ -31,7 +31,7 @@ class PartitionsStore(BaseStore):
     max_cached_data: Indicate the max number of appends that can be preserved in memory before being writed
         to the file
     core_handler: Internal handle for every partition, this control how the writes/reads/append happen
-    dataset: It's an xarray Dataset which handle all the partitions as unique array, so this is used to read
+    dataset: It's an xarray Dataset which handle all the partitions as a unique array, so this is used to read
     dims_conversion: This will be deleted in the future
     modified_partitions: Save the names of all the modified partitions, this is helpful to know what partitions
         needs a backup

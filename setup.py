@@ -30,6 +30,7 @@ setup(
         'numpy',
         'loguru',
         'dask',
-        'boto3'
+        'boto3',
+        'pyyaml'
     ]
 )

@@ -79,7 +79,6 @@ class TestDimsHandler:
 
         assert dims_handler.is_dim_static('index')
         assert dims_handler.is_dim_static('columns')
-        assert dims_handler.is_static
         assert dims_handler.is_complete()
 
     def test_coords_positions(self):
