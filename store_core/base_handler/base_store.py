@@ -1,56 +1,49 @@
 import xarray
+import os
+
 from abc import abstractmethod
 from typing import Dict, List, Any, Union, Callable, Generic
-from store_core.netcdf_handler.dims_handler import DimsHandler
-from store_core.base_handler.base_metadata_handler import BaseMetadataHandler
 
 
 class BaseStore:
     def __init__(self,
-                 base_path: str,
-                 dims: List[str],
-                 dims_type: Dict[str, str],
-                 dims_space: Dict[str, Union[float, int]],
-                 default_free_value: Any = None,
-                 concat_dim: str = "index",
-                 first_write: bool = False,
+                 path: str,
+                 base_path: str = None,
                  *args,
                  **kwargs):
+        self.path = path
         self.base_path = base_path
-        self.metadata: BaseMetadataHandler = None
-        self.dims_handler = DimsHandler(
-            coords={},
-            dims=dims,
-            dims_space=dims_space,
-            dims_type=dims_type,
-            default_free_value=default_free_value,
-            concat_dim=concat_dim,
-            *args,
-            **kwargs
-        )
+        self.__dict__.update(kwargs)
 
     @abstractmethod
-    def append_data(self, new_data: xarray.DataArray, *args, **kwargs):
+    def append_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
         pass
 
     @abstractmethod
-    def update_data(self, new_data: xarray.DataArray, *args, **kwargs):
+    def update_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
         pass
 
     @abstractmethod
-    def store_data(self, new_data: xarray.DataArray, *args, **kwargs):
+    def store_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
         pass
 
     @abstractmethod
-    def get_dataset(self) -> xarray.Dataset:
+    def update_from_backup(self, *args, **kwargs):
         pass
 
     @abstractmethod
-    def save(self):
+    def backup(self, *args, **kwargs):
         pass
 
     @abstractmethod
-    def close(self):
+    def get_dataset(self, *args, **kwargs) -> xarray.Dataset:
         pass
 
+    @abstractmethod
+    def close(self, *args, **kwargs):
+        pass
+
+    @property
+    def local_path(self):
+        return os.path.join("" if self.base_path is None else self.base_path, self.path)
 

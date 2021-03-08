@@ -12,7 +12,7 @@ from config_path.config_root_dir import TEST_DIR_METADATA
 
 def get_default_metadata(first_write):
     return MetadataHandler(
-        base_path=TEST_DIR_METADATA,
+        local_path=TEST_DIR_METADATA,
         first_write=first_write,
         attribute_1='test_1',
         attribute_2={'index': 'ey'},
@@ -46,7 +46,7 @@ class TestMetadataHandler:
         metadata_handler = get_default_metadata(True)
 
         core_handler = get_default_handler(
-            os.path.join(metadata_handler.base_path,  '0.nc'),
+            os.path.join(metadata_handler.local_path,  '0.nc'),
             True
         )
         metadata_handler.concat_new_partition(
@@ -86,7 +86,7 @@ class TestMetadataHandler:
                       np.array([0, 1, 2, 3, 4, 5, 6, 7]))
 
         assert np.all(np.array(partition_names) == '0.nc')
-        assert np.all(np.array(partition_paths) == os.path.join(metadata_handler.base_path,  '0.nc'))
+        assert np.all(np.array(partition_paths) == os.path.join(metadata_handler.local_path,  '0.nc'))
 
     def test_get_attributes(self):
         self.test_append_data()

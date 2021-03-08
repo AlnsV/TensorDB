@@ -8,6 +8,7 @@ from loguru import logger
 from store_core.base_handler.base_store import BaseStore
 from store_core.netcdf_handler.core_handler import CoreNetcdfHandler, BaseCoreHandler
 from store_core.netcdf_handler.metadata_handler import MetadataHandler
+from store_core.netcdf_handler.dims_handler import DimsHandler
 from store_core.utils import modify_coord_dtype
 
 
@@ -41,6 +42,11 @@ class PartitionsStore(BaseStore):
 
     """
     def __init__(self,
+                 dims: List[str],
+                 dims_type: Dict[str, str],
+                 dims_space: Dict[str, Union[float, int]],
+                 default_free_value: Any = None,
+                 concat_dim: str = "index",
                  dims_conversion: Dict[str, str] = None,
                  default_value: Any = np.nan,
                  max_cached_data: int = 0,
@@ -49,7 +55,17 @@ class PartitionsStore(BaseStore):
                  **kwargs):
 
         super().__init__(*args, **kwargs)
-        self.metadata = MetadataHandler(*args, **kwargs)
+        self.metadata = MetadataHandler(local_path=self.local_path, *args, **kwargs)
+        self.dims_handler = DimsHandler(
+            coords={},
+            dims=dims,
+            dims_space=dims_space,
+            dims_type=dims_type,
+            default_free_value=default_free_value,
+            concat_dim=concat_dim,
+            *args,
+            **kwargs
+        )
         self.default_value = default_value
         self._cached_data = []
         self.modified_partitions = set()
@@ -133,7 +149,7 @@ class PartitionsStore(BaseStore):
     def write_new_partition(self, new_data: xarray.DataArray, *args, **kwargs):
         self.close_dataset()
         new_partition = self.get_core_partition(
-            path=os.path.join(self.base_path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
+            path=os.path.join(self.local_path, str(new_data.coords[self.dims_handler.concat_dim].values[0]) + '.nc'),
             first_write=True,
             *args,
             **kwargs

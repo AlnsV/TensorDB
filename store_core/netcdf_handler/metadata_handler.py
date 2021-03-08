@@ -8,7 +8,6 @@ from loguru import logger
 
 from .core_handler import CoreNetcdfHandler, BaseCoreHandler
 from .attributes_utils import get_attribute, get_all_attributes, save_attributes
-from store_core.base_handler import BaseMetadataHandler
 
 
 def get_partition_index(data=None, index=None):
@@ -30,16 +29,24 @@ def get_partition_index(data=None, index=None):
     )
 
 
-class MetadataHandler(BaseMetadataHandler):
+class MetadataHandler:
 
     def __init__(self,
+                 local_path: str,
                  avoid_load_index: bool = False,
                  first_write: bool = False,
                  metadata_file_name: str = "metadata.nc",
                  *args,
                  **kwargs):
 
-        super().__init__(first_write=first_write, metadata_file_name=metadata_file_name, *args, **kwargs)
+        self.local_path = local_path
+        self.index = None
+        self.metadata_file_name = metadata_file_name
+        self.metadata_path = os.path.join(self.local_path, self.metadata_file_name)
+        self.first_write = first_write
+        self.partitions_metadata: Dict[str, Dict[str, Any]] = {}
+        self._partition_names: List[str] = None
+        self.last_s3_modified_date = None
 
         if self.first_write:
             # create an empty file
@@ -50,6 +57,16 @@ class MetadataHandler(BaseMetadataHandler):
                 self.index = CoreNetcdfHandler.get_external_computed_array(self.metadata_path, 'index')
             self.partitions_metadata = self.get_attribute(name='partitions_metadata')
             self.last_s3_modified_date = self.get_attribute(name='last_s3_modified_date')
+
+    @property
+    def partition_names(self):
+        if self._partition_names is None:
+            self._partition_names = [
+                name for name in self.partitions_metadata.keys()
+                if name != self.metadata_file_name
+            ]
+        return self._partition_names
+
 
     def _create_default_core_metadata_handler(self, group, first_write, dims_space=None):
         dims_space = dims_space
@@ -147,16 +164,16 @@ class MetadataHandler(BaseMetadataHandler):
         return self.partition_names[-1]
 
     def get_last_partition_path(self) -> str:
-        return os.path.join(self.base_path, self.get_last_partition_name())
+        return os.path.join(self.local_path, self.get_last_partition_name())
 
     def get_partition_path(self, partition_id: Union[int, str]) -> str:
         partition_pos = partition_id
         if isinstance(partition_pos, str):
             partition_pos = self.partition_names.index(partition_id)
-        return os.path.join(self.base_path, self.partition_names[partition_pos])
+        return os.path.join(self.local_path, self.partition_names[partition_pos])
 
     def get_partition_paths(self) -> List[str]:
-        return [os.path.join(self.base_path, name) for name in self.partition_names]
+        return [os.path.join(self.local_path, name) for name in self.partition_names]
 
     def get_attribute(self, name, group: str = None, default: Any = None):
         return get_attribute(path=self.metadata_path, name=name, group=group, default=default)
@@ -165,4 +182,5 @@ class MetadataHandler(BaseMetadataHandler):
         return get_all_attributes(path=self.metadata_path, group=group)
 
     def save_attributes(self, group: str = None, **kwargs):
-        save_attributes(path=self.metadata_path, group=group, **kwargs)
+        kwargs.update({'path': self.metadata_path, 'group': group})
+        save_attributes(**kwargs)

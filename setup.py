@@ -31,6 +31,7 @@ setup(
         'loguru',
         'dask',
         'boto3',
-        'pyyaml'
+        'pyyaml',
+        'zarr'
     ]
 )

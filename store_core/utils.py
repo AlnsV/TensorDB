@@ -2,6 +2,8 @@ import xarray
 import numpy as np
 import pandas as pd
 
+from loguru import logger
+
 
 def create_dummy_array(n_rows, n_cols, coords=None, dtype=None) -> xarray.DataArray:
     coords = coords
@@ -61,10 +63,15 @@ def modify_coord_dtype(coord: np.array, dtype: str):
 
 
 def compare_dataset(a, b):
+    if isinstance(b, xarray.Dataset):
+        b = b.to_array()
+
     equals = True
     for name, coord in a.coords.items():
         equals &= coord.equals(b.coords[name])
-    equals &= np.all(a.loc[b.coords].to_array().values == b.values)
+
+    a = a.to_array().loc[b.coords]
+    equals &= np.allclose(a.values, b.values, equal_nan=True)
     return equals
 
 

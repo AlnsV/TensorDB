@@ -12,7 +12,7 @@ class TestPartitionsHandler:
     def test_write_new_partitions(self):
         for handler in [CoreNetcdfHandler, CoreSimpleHandler]:
             partitions_store = PartitionsStore(
-                base_path=TEST_DIR_PARTITIONS + '/creation',
+                path=TEST_DIR_PARTITIONS + '/creation',
                 dims=['index', 'columns'],
                 dims_type={'index': 'fixed', 'columns': 'percentage'},
                 dims_space={'index': 5, 'columns': 0.1},
@@ -42,7 +42,7 @@ class TestPartitionsHandler:
     def test_append_data(self):
         for handler in [CoreSimpleHandler, CoreNetcdfHandler]:
             partitions_store = PartitionsStore(
-                base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+                path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
                 dims=['index', 'columns'],
                 dims_type={'index': 'fixed', 'columns': 'percentage'},
                 dims_space={'index': 5, 'columns': 0.1},
@@ -69,7 +69,7 @@ class TestPartitionsHandler:
     def test_store_data(self):
         for handler in [CoreSimpleHandler, CoreNetcdfHandler]:
             partitions_store = PartitionsStore(
-                base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+                path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
                 dims=['index', 'columns'],
                 dims_type={'index': 'fixed', 'columns': 'percentage'},
                 dims_space={'index': 5, 'columns': 0.1},
@@ -93,7 +93,7 @@ class TestPartitionsHandler:
         self.test_store_data()
         for handler in [CoreSimpleHandler, CoreNetcdfHandler]:
             partitions_store = PartitionsStore(
-                base_path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
+                path=os.path.join(TEST_DIR_PARTITIONS, 'append'),
                 dims=['index', 'columns'],
                 dims_type={'index': 'fixed', 'columns': 'percentage'},
                 dims_space={'index': 5, 'columns': 0.1},
