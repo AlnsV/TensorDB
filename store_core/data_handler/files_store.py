@@ -23,11 +23,10 @@ class FilesStore:
 
         Notes
         -----
-        1) This class does not handle any kind of concurrency or syncronization between multiples process reading
-        and writing, but of course depeneding in the internal handler of every file it can read or write using multiple
-        cores
+        1) This class does not have any kind of concurrency but of course the internal handler could have
 
-        2) The actual recommend option to handle the files is using the class called PartitionsStore and netcdf4 format
+        2) The actual recommend option to handle the files is using the zarr handler class which allow to write and read
+        concurrently
     """
 
     def __init__(self,

@@ -13,6 +13,7 @@ from store_core.s3_handler.s3_handler import S3Handler
 
 
 class ZarrStore(BaseStore):
+
     def __init__(self,
                  dims: List[str] = None,
                  name: str = "data",
@@ -38,15 +39,19 @@ class ZarrStore(BaseStore):
 
     def store_data(self,
                    new_data: Union[xarray.DataArray, xarray.Dataset],
-                   consolidated: bool = True,
                    *args,
                    **kwargs):
+
         self.close_dataset()
         new_data = self.transform_to_dataset(new_data)
         new_data.to_zarr(self.local_path, group=self.group, mode='w', *args, **kwargs)
         self.check_modification = True
 
-    def append_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def append_data(self,
+                    new_data: Union[xarray.DataArray, xarray.Dataset],
+                    *args,
+                    **kwargs):
+
         new_data = self.transform_to_dataset(new_data)
         act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
         self.close_dataset()
@@ -73,7 +78,10 @@ class ZarrStore(BaseStore):
 
             self.check_modification = True
 
-    def update_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def update_data(self,
+                    new_data: Union[xarray.DataArray, xarray.Dataset],
+                    *args,
+                    **kwargs):
         """
         TODO: Avoid loading the entire new data in memory
               Using the to_zarr method of xarray and updating in blocks with the region parameter is
@@ -98,6 +106,7 @@ class ZarrStore(BaseStore):
     def get_dataset(self,
                     *args,
                     **kwargs) -> xarray.Dataset:
+
         if self.dataset is None:
             self.dataset = xarray.open_zarr(
                 self.local_path,
@@ -109,6 +118,7 @@ class ZarrStore(BaseStore):
         return self.dataset
 
     def get_chunks_modified_dates(self):
+
         if not os.path.exists(os.path.join(self.local_path)):
             return {}
 
@@ -121,6 +131,7 @@ class ZarrStore(BaseStore):
         return chunks_dates
 
     def transform_to_dataset(self, new_data) -> xarray.Dataset:
+
         new_data = new_data
         if isinstance(new_data, xarray.DataArray):
             new_data = new_data.to_dataset(name=self.name)
@@ -128,6 +139,7 @@ class ZarrStore(BaseStore):
         return new_data
 
     def backup(self, *args, **kwargs):
+
         """
         TODO: Use threads for uploading the data to s3
         """
@@ -153,6 +165,7 @@ class ZarrStore(BaseStore):
         self.chunks_modified_dates = self.get_chunks_modified_dates()
 
     def update_from_backup(self, *args, **kwargs):
+
         """
         TODO: Use threads for downloading the data to s3
         """
@@ -182,11 +195,13 @@ class ZarrStore(BaseStore):
             )
 
     def close_dataset(self):
+
         if self.dataset is not None:
             self.dataset.close()
             self.dataset = None
 
     def close(self, *args, **kwargs):
+
         self.backup(*args, **kwargs)
         self.close_dataset()
 
