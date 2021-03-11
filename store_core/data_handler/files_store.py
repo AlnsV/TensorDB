@@ -85,7 +85,12 @@ class FilesStore:
 
         if 'get_dataset' in self.files_settings[file_setting_id]:
             return getattr(self, self.files_settings[file_setting_id]['get_dataset'])(*args, **kwargs)
-        return self.get_handler(file_setting_id=file_setting_id, path=path, **kwargs).get_dataset()
+
+        return self.get_handler(
+            file_setting_id=file_setting_id,
+            path=path,
+            **kwargs
+        ).get_dataset()
 
     def append_data(self,
                     file_setting_id: str,

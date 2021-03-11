@@ -28,7 +28,6 @@ class ZarrStore(BaseStore):
         self.name = name
         self.chunks = chunks
         self.group = group
-        self.dataset = None
         self.s3_handler = s3_handler
         if isinstance(s3_handler, Dict):
             self.s3_handler = S3Handler(**s3_handler) if isinstance(s3_handler, dict) else s3_handler
@@ -42,7 +41,6 @@ class ZarrStore(BaseStore):
                    *args,
                    **kwargs):
 
-        self.close_dataset()
         new_data = self.transform_to_dataset(new_data)
         new_data.to_zarr(self.local_path, group=self.group, mode='w', *args, **kwargs)
         self.check_modification = True
@@ -54,7 +52,6 @@ class ZarrStore(BaseStore):
 
         new_data = self.transform_to_dataset(new_data)
         act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
-        self.close_dataset()
 
         for dim, new_coord in new_data.coords.items():
             new_coord = new_coord.values
@@ -97,8 +94,6 @@ class ZarrStore(BaseStore):
         for coord_name in coords_names[1:]:
             bitmask = bitmask & np.isin(act_coords[coord_name], new_data.coords[coord_name].values)[:, None]
 
-        self.close_dataset()
-
         arr = zarr.open(os.path.join(self.local_path, self.name), mode='a')
         arr.set_mask_selection(bitmask, new_data.values.ravel())
         self.check_modification = True
@@ -107,15 +102,12 @@ class ZarrStore(BaseStore):
                     *args,
                     **kwargs) -> xarray.Dataset:
 
-        if self.dataset is None:
-            self.dataset = xarray.open_zarr(
-                self.local_path,
-                group=self.group,
-                *args,
-                **kwargs
-            )
-
-        return self.dataset
+        return xarray.open_zarr(
+            self.local_path,
+            group=self.group,
+            *args,
+            **kwargs
+        )
 
     def get_chunks_modified_dates(self):
 
@@ -172,7 +164,6 @@ class ZarrStore(BaseStore):
 
         if self.s3_handler is None:
             return
-        self.close_dataset()
 
         files_names = self.s3_handler.s3.list_objects(
             Bucket=self.bucket_name,
@@ -194,16 +185,8 @@ class ZarrStore(BaseStore):
                 s3_path=obj['Key']
             )
 
-    def close_dataset(self):
-
-        if self.dataset is not None:
-            self.dataset.close()
-            self.dataset = None
-
     def close(self, *args, **kwargs):
-
         self.backup(*args, **kwargs)
-        self.close_dataset()
 
 
 
