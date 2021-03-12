@@ -50,6 +50,12 @@ class ZarrStore(BaseStore):
                     *args,
                     **kwargs):
 
+        if not os.path.exists(self.local_path):
+            self.update_from_backup(raise_error_missing_data=False, *args, **kwargs)
+
+        if not os.path.exists(self.local_path):
+            return self.store_data(new_data=new_data, *args, **kwargs)
+
         new_data = self.transform_to_dataset(new_data)
         act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
 
@@ -85,6 +91,9 @@ class ZarrStore(BaseStore):
               probably a good solution, the only problem is the time that could take to update,
               but I suppose that the block updating is ideal only when the new_data represent a big % of the entire data
         """
+        if not os.path.exists(self.local_path):
+            self.update_from_backup(raise_error_missing_data=True, *args, **kwargs)
+
         if isinstance(new_data, xarray.Dataset):
             new_data = new_data.to_array()
         act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
@@ -120,6 +129,7 @@ class ZarrStore(BaseStore):
             total_path = os.path.join(self.local_path, chunk_name)
             date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
             chunks_dates[total_path] = date
+
         return chunks_dates
 
     def transform_to_dataset(self, new_data) -> xarray.Dataset:
@@ -132,35 +142,33 @@ class ZarrStore(BaseStore):
 
     def backup(self, *args, **kwargs):
 
-        """
-        TODO: Use threads for uploading the data to s3
-        """
         if not self.check_modification or self.s3_handler is None:
             return
 
         self.check_modification = False
         arr_store = zarr.open(self.local_path, mode='r')
+        file_settings = []
+
         for chunk_name in arr_store.chunk_store.keys():
             total_path = os.path.join(self.local_path, chunk_name)
             modified_date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
+
             upload = False
             if chunk_name not in self.chunks_modified_dates or modified_date != self.chunks_modified_dates[total_path]:
                 upload = True
 
             if upload:
-                self.s3_handler.upload_file(
+                file_settings.append(dict(
                     local_path=total_path,
                     s3_path=os.path.join(self.path, chunk_name),
                     bucket_name=self.bucket_name,
                     **kwargs
-                )
+                ))
+
+        self.s3_handler.upload_files(file_settings)
         self.chunks_modified_dates = self.get_chunks_modified_dates()
 
-    def update_from_backup(self, *args, **kwargs):
-
-        """
-        TODO: Use threads for downloading the data to s3
-        """
+    def update_from_backup(self, raise_error_missing_data: bool = True, *args, **kwargs):
 
         if self.s3_handler is None:
             return
@@ -168,22 +176,32 @@ class ZarrStore(BaseStore):
         files_names = self.s3_handler.s3.list_objects(
             Bucket=self.bucket_name,
             Prefix=self.path
-        )['Contents']
+        )
 
-        for obj in files_names:
+        if 'Contents' not in files_names:
+            if raise_error_missing_data:
+                raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
+            return
+
+        if not os.path.exists(self.local_path):
+            os.makedirs(self.local_path)
+
+        file_settings = []
+
+        for obj in files_names['Contents']:
             local_path = os.path.join(self.base_path, obj['Key'])
-
-            if not os.path.exists(os.path.dirname(local_path)):
-                os.makedirs(os.path.dirname(local_path))
 
             if obj['Key'][-1] == '/':
                 continue
 
-            self.s3_handler.download_file(
+            file_settings.append(dict(
                 bucket_name=self.bucket_name,
                 local_path=local_path,
-                s3_path=obj['Key']
-            )
+                s3_path=obj['Key'],
+                **kwargs
+            ))
+
+        self.s3_handler.download_files(file_settings)
 
     def close(self, *args, **kwargs):
         self.backup(*args, **kwargs)
