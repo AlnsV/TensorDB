@@ -23,6 +23,16 @@ class S3Handler:
             region_name=region_name,
         )
 
+    @staticmethod
+    def _multi_process_function(func: Callable, arguments: List[Dict[str, str]]):
+        """
+        TODO: Simplify or improve this code, probably would be better to use map
+        """
+        p = ThreadPool(processes=os.cpu_count())
+        futures = [p.apply_async(func=func, kwds=kwds) for kwds in arguments]
+        for future in futures:
+            future.get()
+
     def download_file(self, bucket_name: str, local_path: str, s3_path: str = None, *args, **kwargs):
         s3_path = (os.path.dirname(local_path) if s3_path is None else s3_path).replace("\\", "/")
 
@@ -34,16 +44,6 @@ class S3Handler:
             local_path,
             Config=TransferConfig(max_concurrency=20),
         )
-
-    @staticmethod
-    def _multi_process_function(func: Callable, arguments: List[Dict[str, str]]):
-        """
-        TODO: Simplify or improve this code, probably would be better to use map
-        """
-        p = ThreadPool(processes=os.cpu_count())
-        futures = [p.apply_async(func=func, kwds=kwds) for kwds in arguments]
-        for future in futures:
-            future.get()
 
     def download_files(self, files_settings: List[Dict[str, str]]):
         S3Handler._multi_process_function(self.download_file, files_settings)

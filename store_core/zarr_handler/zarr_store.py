@@ -183,8 +183,7 @@ class ZarrStore(BaseStore):
                 raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
             return
 
-        if not os.path.exists(self.local_path):
-            os.makedirs(self.local_path)
+        os.makedirs(self.local_path, exist_ok=True)
 
         file_settings = []
 

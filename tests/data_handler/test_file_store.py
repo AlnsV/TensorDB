@@ -43,12 +43,12 @@ class TestFileStore:
     def test_store_data(self):
         file_store = get_default_file_store()
         arr = create_dummy_array(10, 10)
-        file_store.store_data(new_data=arr, file_setting_id='data_one', path='data_one')
-        assert compare_dataset(file_store.get_dataset(file_setting_id='data_one', path='data_one'), arr)
+        file_store.store_data(new_data=arr, path='data_one')
+        assert compare_dataset(file_store.get_dataset(path='data_one'), arr)
 
         arr = create_dummy_array(10, 10)
-        file_store.store_data(new_data=arr, file_setting_id='data_two', path='data_two')
-        assert compare_dataset(file_store.get_dataset(file_setting_id='data_two', path='data_two'), arr)
+        file_store.store_data(new_data=arr, path='data_two')
+        assert compare_dataset(file_store.get_dataset(path='data_two'), arr)
 
         # file_store.close()
 
@@ -56,8 +56,8 @@ class TestFileStore:
         self.test_store_data()
         file_store = get_default_file_store()
         arr = create_dummy_array(10, 10)
-        file_store.update_data(new_data=arr, file_setting_id='data_one', path='data_one')
-        assert compare_dataset(file_store.get_dataset(file_setting_id='data_one', path='data_one'), arr)
+        file_store.update_data(new_data=arr, path='data_one')
+        assert compare_dataset(file_store.get_dataset(path='data_one'), arr)
         # file_store.close()
 
     def test_append_data(self):
@@ -77,23 +77,23 @@ class TestFileStore:
         )
 
         for i in range(arr.sizes['index']):
-            file_store.append_data(new_data=arr.isel(index=[i]), file_setting_id='data_one', path='data_one')
+            file_store.append_data(new_data=arr.isel(index=[i]), path='data_one')
 
-        assert compare_dataset(file_store.get_dataset(file_setting_id='data_one', path='data_one').sel(arr.coords), arr)
+        assert compare_dataset(file_store.get_dataset(path='data_one').sel(arr.coords), arr)
         # file_store.close()
 
     def test_backup(self):
         file_store = get_default_file_store()
         arr = create_dummy_array(3, 3)
-        file_store.store_data(new_data=arr, file_setting_id='data_one', path='data_one')
-        handler = file_store.get_handler(file_setting_id='data_one', path='data_one')
+        file_store.store_data(new_data=arr, path='data_one')
+        handler = file_store.get_handler(path='data_one')
 
         assert handler.check_modification
         handler.backup()
         handler.update_from_backup()
 
         assert handler.s3_handler is not None
-        assert compare_dataset(file_store.get_dataset(file_setting_id='data_one', path='data_one').sel(arr.coords), arr)
+        assert compare_dataset(file_store.get_dataset(path='data_one').sel(arr.coords), arr)
         logger.info(handler.get_dataset())
 
 

@@ -41,7 +41,7 @@ class FilesStore:
 
         """
         self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
-        self.files_settings = files_settings
+        self._files_settings = files_settings
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
         self.max_files_in_disk = max_files_in_disk
 
@@ -56,19 +56,27 @@ class FilesStore:
 
         self.__dict__.update(**kwargs)
 
+    @property
+    def file_settings(self):
+        return self._files_settings
+
+    def get_file_setting(self, path):
+        file_setting = os.path.basename(os.path.normpath(path))
+        return self._files_settings.get(file_setting, self._files_settings.get('generic', {}))
+
     def get_handler(self,
-                    file_setting_id: str,
                     path: Union[str, List],
                     **kwargs) -> BaseStore:
 
-        local_path = self.complete_path(file_setting_id=file_setting_id, path=path)
+        file_setting = self.get_file_setting(path)
+        local_path = self.complete_path(file_setting=file_setting, path=path)
         if local_path not in self.open_base_store:
             self.open_base_store[local_path] = {
-                'data_handler': self.files_settings[file_setting_id]['data_handler'](
+                'data_handler': file_setting['data_handler'](
                     base_path=self.base_path,
-                    path=self.complete_path(file_setting_id=file_setting_id, path=path, omit_base_path=True),
+                    path=self.complete_path(file_setting=file_setting, path=path, omit_base_path=True),
                     s3_handler=self.s3_handler,
-                    **self.files_settings[file_setting_id],
+                    **file_setting,
                     **kwargs
                 ),
                 'first_read_date': pd.Timestamp.now(),
@@ -78,28 +86,26 @@ class FilesStore:
         return self.open_base_store[local_path]['data_handler']
 
     def get_dataset(self,
-                    file_setting_id: str,
                     path: Union[str, List],
                     *args,
                     **kwargs) -> xarray.Dataset:
 
-        if 'get_dataset' in self.files_settings[file_setting_id]:
-            return getattr(self, self.files_settings[file_setting_id]['get_dataset'])(*args, **kwargs)
+        file_setting = self.get_file_setting(path)
+        if 'get_dataset' in file_setting:
+            return getattr(self, file_setting['get_dataset'])(*args, **kwargs)
 
         return self.get_handler(
-            file_setting_id=file_setting_id,
             path=path,
             **kwargs
         ).get_dataset()
 
     def append_data(self,
-                    file_setting_id: str,
                     path: Union[str, List],
                     new_data: xarray.DataArray = None,
                     *args,
                     **kwargs):
 
-        file_setting = self.files_settings[file_setting_id]
+        file_setting = self.get_file_setting(path)
         if 'append_data' in file_setting:
             return getattr(self, file_setting['append_data'])(
                 file_setting=file_setting,
@@ -110,7 +116,6 @@ class FilesStore:
             )
 
         return self.get_handler(
-            file_setting_id,
             path=path,
             **kwargs
         ).append_data(
@@ -120,16 +125,14 @@ class FilesStore:
         )
 
     def update_data(self,
-                    file_setting_id: str,
                     path: Union[str, List],
                     new_data: xarray.DataArray = None,
                     *args,
                     **kwargs):
 
-        file_setting = self.files_settings[file_setting_id]
+        file_setting = self.get_file_setting(path)
         if 'update_data' in file_setting:
             return getattr(self, file_setting['update_data'])(
-                file_setting=file_setting,
                 path=path,
                 new_data=new_data,
                 *args,
@@ -137,7 +140,6 @@ class FilesStore:
             )
 
         return self.get_handler(
-            file_setting_id,
             path=path,
             **kwargs
         ).update_data(
@@ -147,16 +149,14 @@ class FilesStore:
         )
 
     def store_data(self,
-                   file_setting_id: str,
                    path: Union[str, List],
                    new_data: xarray.DataArray = None,
                    *args,
                    **kwargs):
 
-        file_setting = self.files_settings[file_setting_id]
+        file_setting = self.get_file_setting(path)
         if 'store_data' in file_setting:
             return getattr(self, file_setting['store_data'])(
-                file_setting=file_setting,
                 path=path,
                 new_data=new_data,
                 *args,
@@ -164,7 +164,6 @@ class FilesStore:
             )
 
         return self.get_handler(
-            file_setting_id=file_setting_id,
             path=path,
             **kwargs
         ).store_data(
@@ -174,11 +173,11 @@ class FilesStore:
         )
 
     def backup(self,
-               file_setting_id: str,
                path: Union[str, List],
                *args,
                **kwargs):
-        file_setting = self.files_settings[file_setting_id]
+
+        file_setting = self.get_file_setting(path)
         if 'backup' in file_setting:
             return getattr(self, file_setting['backup'])(
                 file_setting=file_setting,
@@ -188,7 +187,6 @@ class FilesStore:
             )
 
         return self.get_handler(
-            file_setting_id=file_setting_id,
             path=path,
             **kwargs
         ).backup(
@@ -197,11 +195,11 @@ class FilesStore:
         )
 
     def update_from_backup(self,
-                           file_setting_id: str,
                            path: Union[str, List],
                            *args,
                            **kwargs):
-        file_setting = self.files_settings[file_setting_id]
+
+        file_setting = self.get_file_setting(path)
         if 'update_from_backup' in file_setting:
             return getattr(self, file_setting['update_from_backup'])(
                 file_setting=file_setting,
@@ -211,7 +209,6 @@ class FilesStore:
             )
 
         return self.get_handler(
-            file_setting_id=file_setting_id,
             path=path,
             **kwargs
         ).update_from_backup(
@@ -220,22 +217,19 @@ class FilesStore:
         )
 
     def close(self,
-              file_setting_id: str,
               path: Union[str, List],
               *args,
               **kwargs):
 
-        file_setting = self.files_settings[file_setting_id]
+        file_setting = self.get_file_setting(path)
         if 'close' in file_setting:
             return getattr(self, file_setting['close'])(
-                file_setting=file_setting,
                 path=path,
                 *args,
                 **kwargs
             )
 
         return self.get_handler(
-            file_setting_id=file_setting_id,
             path=path,
             **kwargs
         ).close(
@@ -244,12 +238,16 @@ class FilesStore:
         )
 
     def complete_path(self,
-                      file_setting_id: str,
+                      file_setting: Dict,
                       path: Union[List[str], str],
                       omit_base_path: bool = False):
 
         path = path if isinstance(path, list) else [path]
         if not omit_base_path:
-            return os.path.join(self.base_path, self.files_settings[file_setting_id].get('extra_path', ''), *path)
+            return os.path.join(self.base_path, file_setting.get('extra_path', ''), *path)
 
-        return os.path.join(self.files_settings[file_setting_id].get('extra_path', ''), *path)
+        return os.path.join(file_setting.get('extra_path', ''), *path)
+
+    def add_file_setting(self, name, file_setting):
+        self._files_settings[name] = file_setting
+
