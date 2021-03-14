@@ -101,7 +101,6 @@ class FilesStore:
 
     def append_data(self,
                     path: Union[str, List],
-                    new_data: xarray.DataArray = None,
                     *args,
                     **kwargs):
 
@@ -110,7 +109,6 @@ class FilesStore:
             return getattr(self, file_setting['append_data'])(
                 file_setting=file_setting,
                 path=path,
-                new_data=new_data,
                 *args,
                 **kwargs
             )
@@ -119,14 +117,12 @@ class FilesStore:
             path=path,
             **kwargs
         ).append_data(
-            new_data,
             *args,
             **kwargs
         )
 
     def update_data(self,
                     path: Union[str, List],
-                    new_data: xarray.DataArray = None,
                     *args,
                     **kwargs):
 
@@ -134,7 +130,6 @@ class FilesStore:
         if 'update_data' in file_setting:
             return getattr(self, file_setting['update_data'])(
                 path=path,
-                new_data=new_data,
                 *args,
                 **kwargs
             )
@@ -143,14 +138,12 @@ class FilesStore:
             path=path,
             **kwargs
         ).update_data(
-            new_data,
             *args,
             **kwargs
         )
 
     def store_data(self,
                    path: Union[str, List],
-                   new_data: xarray.DataArray = None,
                    *args,
                    **kwargs):
 
@@ -158,7 +151,6 @@ class FilesStore:
         if 'store_data' in file_setting:
             return getattr(self, file_setting['store_data'])(
                 path=path,
-                new_data=new_data,
                 *args,
                 **kwargs
             )
@@ -167,7 +159,6 @@ class FilesStore:
             path=path,
             **kwargs
         ).store_data(
-            new_data=new_data,
             *args,
             **kwargs
         )

@@ -15,42 +15,36 @@ class FileDB(FilesStore):
         self.postgres_handler = DatabaseHandler()
 
     def store_generic_table_from_to(self,
-                                    file_setting_id: str,
                                     path: Union[str, List],
                                     *args,
                                     **kwargs):
         pass
 
     def store_generic_table_time_series(self,
-                                        file_setting_id: str,
                                         path: Union[str, List],
                                         *args,
                                         **kwargs):
         pass
 
     def append_generic_table_from_to(self,
-                                     file_setting_id: str,
                                      path: Union[str, List],
                                      *args,
                                      **kwargs):
         pass
 
     def append_generic_table_time_series(self,
-                                         file_setting_id: str,
                                          path: Union[str, List],
                                          *args,
                                          **kwargs):
         pass
 
     def update_generic_table_from_to(self,
-                                     file_setting_id: str,
                                      path: Union[str, List],
                                      *args,
                                      **kwargs):
         pass
 
     def update_generic_table_time_series(self,
-                                         file_setting_id: str,
                                          path: Union[str, List],
                                          *args,
                                          **kwargs):
