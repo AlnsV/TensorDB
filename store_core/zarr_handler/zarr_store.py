@@ -114,7 +114,7 @@ class ZarrStore(BaseStore):
     def get_dataset(self,
                     *args,
                     **kwargs) -> xarray.Dataset:
-
+        # self.update_from_backup(*args, **kwargs)
         return xarray.open_zarr(
             self.local_path,
             group=self.group,
@@ -175,9 +175,9 @@ class ZarrStore(BaseStore):
     def update_from_backup(self, raise_error_missing_data: bool = True, *args, **kwargs):
         """
         TODO:
-            1) Add a mechanism to avoid download unnecesary data. My recommendation are two things:
+            1) Add a mechanism to avoid download unnecessary data. My recommendation are two things:
                 a) Add the last_valid_date of the general folder as metadata in the file, with this we can avoid
-                    unnecesaries check of the partitions (which can be a lot)
+                    unnecessaries check of the partitions (which can be a lot)
                 b) Check if the last_modified_date of S3 is bigger than the last_modified_date of the internal file
                     if that is the case download the partition in the other case not
             2) Add a parameter called force_download which will be useful to undo any local modification

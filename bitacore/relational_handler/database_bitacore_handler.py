@@ -55,14 +55,17 @@ class ProviderDatabase(object):
 
     def get_generic_time_series_data(self,
                                      start_date: Union[str, pd.Timestamp],
-                                     end_date: Union[str, pd.Timestamp],
                                      table_name: str,
                                      value_name: str,
                                      time_name: str,
+                                     end_date: Union[str, pd.Timestamp] = None,
                                      *args,
                                      **kwargs) -> pd.DataFrame:
         start_date = start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d')
-        end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+        end_date_filter = ''
+        if end_date is not None:
+            end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+            end_date_filter = f"AND {time_name} > '{end_date}'"
         query = f"""
             SELECT 
                 a.{time_name} AS dates,
@@ -70,22 +73,25 @@ class ProviderDatabase(object):
                 a.security_id AS security_id
             FROM {table_name} AS a
             WHERE {time_name} > '{start_date}'
-                AND {time_name} <= '{end_date}'
+                {end_date_filter}
         """
         data = self.execute_query(query, 'generic_time_series')
         return data
 
     def get_generic_from_to_data(self,
-                                 start_date: Union[str, pd.Timestamp],
-                                 end_date: Union[str, pd.Timestamp],
                                  table_name: str,
                                  value_name: str,
+                                 start_date: Union[str, pd.Timestamp],
                                  from_to_name: str = 'from_date',
                                  to_date_name: str = 'to_date',
+                                 end_date: Union[str, pd.Timestamp] = None,
                                  *args,
                                  **kwargs) -> pd.DataFrame:
         start_date = start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d')
-        end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+        end_date_filter = ''
+        if end_date is not None:
+            end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+            end_date_filter = f"AND {to_date_name} > '{end_date}'"
         query = f"""
             SELECT 
                 a.{from_to_name} AS from_date,
@@ -94,18 +100,18 @@ class ProviderDatabase(object):
                 a.security_id AS security_id
             FROM {table_name} AS a
             WHERE {from_to_name} > '{start_date}'
-                AND {from_to_name} <= '{end_date}'
+                {end_date_filter}
         """
         data = self.execute_query(query, 'generic_time_series')
         return data
 
     def get_esg_data(self,
-                     start_date: Union[str, pd.Timestamp],
-                     end_date: Union[str, pd.Timestamp],
                      data_field: int,
                      table: str,
+                     start_date: Union[str, pd.Timestamp],
                      value_field_name: str = "value",
                      data_level: str = "company",
+                     end_date: Union[str, pd.Timestamp] = None,
                      *args,
                      **kwargs) -> pd.DataFrame:
         """
@@ -115,7 +121,12 @@ class ProviderDatabase(object):
 
         # Converting lists with data into strings for the query
         start_date = start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d')
-        end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+
+        end_date_filter = ''
+        if end_date is not None:
+            end_date = end_date if isinstance(end_date, str) else end_date.strftime('%Y-%m-%d')
+            end_date_filter = f"AND from_date > '{end_date}'"
+
         data_level_query = "esg.m_company_id = m_security.company_id"
         if data_level == 'instrument':
             data_level_query = "esg.m_security_id = m_security.id"
@@ -131,7 +142,7 @@ class ProviderDatabase(object):
                 ON {data_level_query}
             WHERE esg.m_data_field_id = {data_field}
                 AND from_date > '{start_date}'
-                AND {from_to_name} <= '{end_date}'
+                {end_date_filter}
         """
 
         data = self.execute_query(query, 'get_esg_data')

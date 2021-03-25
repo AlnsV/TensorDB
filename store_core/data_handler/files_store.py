@@ -7,6 +7,7 @@ from loguru import logger
 
 from store_core.base_handler.base_store import BaseStore
 from store_core.s3_handler.s3_handler import S3Handler
+from store_core.zarr_handler.zarr_store import ZarrStore
 from config_path.config_root_dir import ROOT_DIR
 
 
@@ -46,7 +47,7 @@ class FilesStore:
 
         if use_env:
             self.base_path = os.path.join(self.base_path, os.getenv("ENV_MODE"))
-            self.files_settings = files_settings[os.getenv("ENV_MODE")]
+            self._files_settings = files_settings[os.getenv("ENV_MODE")]
 
         self.s3_handler = s3_settings
         if s3_settings is not None:
@@ -71,7 +72,7 @@ class FilesStore:
         local_path = self.complete_path(file_setting=file_setting, path=path)
         if local_path not in self.open_base_store:
             self.open_base_store[local_path] = {
-                'data_handler': file_setting['data_handler'](
+                'data_handler': file_setting.get('data_handler', ZarrStore)(
                     base_path=self.base_path,
                     path=self.complete_path(file_setting=file_setting, path=path, omit_base_path=True),
                     s3_handler=self.s3_handler,
