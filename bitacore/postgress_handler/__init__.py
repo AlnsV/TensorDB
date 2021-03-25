@@ -1,2 +1,0 @@
-from bitacore.postgress_handler.database_handler import DatabaseHandler
-

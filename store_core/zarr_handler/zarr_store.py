@@ -107,6 +107,10 @@ class ZarrStore(BaseStore):
         arr.set_mask_selection(bitmask, new_data.values.ravel())
         self.check_modification = True
 
+    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+        self.update_data(new_data, *args, **kwargs)
+        self.append_data(new_data, *args, **kwargs)
+
     def get_dataset(self,
                     *args,
                     **kwargs) -> xarray.Dataset:
@@ -169,7 +173,17 @@ class ZarrStore(BaseStore):
         self.chunks_modified_dates = self.get_chunks_modified_dates()
 
     def update_from_backup(self, raise_error_missing_data: bool = True, *args, **kwargs):
+        """
+        TODO:
+            1) Add a mechanism to avoid download unnecesary data. My recommendation are two things:
+                a) Add the last_valid_date of the general folder as metadata in the file, with this we can avoid
+                    unnecesaries check of the partitions (which can be a lot)
+                b) Check if the last_modified_date of S3 is bigger than the last_modified_date of the internal file
+                    if that is the case download the partition in the other case not
+            2) Add a parameter called force_download which will be useful to undo any local modification
 
+        The to do things are only useful to work in a set of services without unified disk
+        """
         if self.s3_handler is None:
             return
 

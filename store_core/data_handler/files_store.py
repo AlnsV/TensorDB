@@ -8,7 +8,6 @@ from loguru import logger
 from store_core.base_handler.base_store import BaseStore
 from store_core.s3_handler.s3_handler import S3Handler
 from config_path.config_root_dir import ROOT_DIR
-from store_core.netcdf_handler.metadata_handler import MetadataHandler
 
 
 class FilesStore:
@@ -85,6 +84,25 @@ class FilesStore:
         self.open_base_store[local_path]['num_use'] += 1
         return self.open_base_store[local_path]['data_handler']
 
+    def get_dataset_from_formula(self, path, *args, **kwargs):
+        file_setting = self.get_file_setting(path)
+        formula = file_setting['formula']
+        data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
+        data_fields = {}
+        for i in range(0, len(data_fields_intervals), 2):
+            name_data_field = formula[data_fields_intervals[i] + 1: data_fields_intervals[i + 1]]
+            data_fields[name_data_field] = self.get_dataset(
+                name_data_field,
+                *args,
+                **kwargs
+            )
+
+        for name, dataset in data_fields.items():
+            formula = formula.replace(f"`{name}`", f"data_fields['{name}']")
+
+        dataset_formula = eval(formula)
+        return dataset_formula
+
     def get_dataset(self,
                     path: Union[str, List],
                     *args,
@@ -93,6 +111,9 @@ class FilesStore:
         file_setting = self.get_file_setting(path)
         if 'get_dataset' in file_setting:
             return getattr(self, file_setting['get_dataset'])(*args, **kwargs)
+
+        if file_setting.get('on_fly', False):
+            return self.get_dataset_from_formula(path, *args, **kwargs)
 
         return self.get_handler(
             path=path,

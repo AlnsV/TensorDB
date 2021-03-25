@@ -1,7 +1,6 @@
 from loguru import logger
 
 from store_core.data_handler.files_store import FilesStore
-from store_core.netcdf_handler.partitions_handler import PartitionsStore
 from store_core.zarr_handler.zarr_store import ZarrStore
 from store_core.utils import create_dummy_array, compare_dataset
 from config_path.config_root_dir import TEST_DIR_FILE_STORE
@@ -10,21 +9,17 @@ from config_path.config_root_dir import TEST_DIR_FILE_STORE
 def get_default_file_store():
     default_settings = {
         'dims': ['index', 'columns'],
-        'dims_type': {'index': 'fixed', 'columns': 'percentage'},
-        'dims_space': {'index': 5, 'columns': 0.1},
-        'default_free_values': {'index': 'free', 'columns': 'free'},
-        'metadata_file_name': 'metadata.nc',
         'bucket_name': 'test.bitacore.data.2.0',
         'data_handler': ZarrStore,
     }
-    first_data = default_settings.copy()
-    # first_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_one')
-    second_data = default_settings.copy()
-    # second_data['path'] = os.path.join(TEST_DIR_FILE_STORE, 'data_two')
-
+    evaluate_formula_settings = {
+        'formula': "(`data_one` * `data_two`).rolling({'index': 3}).sum()",
+        'on_fly': True
+    }
     files_settings = {
-        'data_one': first_data,
-        'data_two': second_data
+        'data_one': default_settings.copy(),
+        'data_two': default_settings.copy(),
+        'data_three': evaluate_formula_settings.copy()
     }
 
     return FilesStore(
@@ -50,15 +45,12 @@ class TestFileStore:
         file_store.store_data(new_data=arr, path='data_two')
         assert compare_dataset(file_store.get_dataset(path='data_two'), arr)
 
-        # file_store.close()
-
     def test_update_data(self):
         self.test_store_data()
         file_store = get_default_file_store()
         arr = create_dummy_array(10, 10)
         file_store.update_data(new_data=arr, path='data_one')
         assert compare_dataset(file_store.get_dataset(path='data_one'), arr)
-        # file_store.close()
 
     def test_append_data(self):
         self.test_store_data()
@@ -80,7 +72,6 @@ class TestFileStore:
             file_store.append_data(new_data=arr.isel(index=[i]), path='data_one')
 
         assert compare_dataset(file_store.get_dataset(path='data_one').sel(arr.coords), arr)
-        # file_store.close()
 
     def test_backup(self):
         file_store = get_default_file_store()
@@ -96,11 +87,21 @@ class TestFileStore:
         assert compare_dataset(file_store.get_dataset(path='data_one').sel(arr.coords), arr)
         logger.info(handler.get_dataset())
 
+    def test_get_dataset_evaluate(self):
+        self.test_store_data()
+        file_store = get_default_file_store()
+
+        data_three = file_store.get_dataset(path='data_three')
+        data_one = file_store.get_dataset(path='data_one')
+        data_two = file_store.get_dataset(path='data_two')
+        assert compare_dataset(data_three, (data_one * data_two).rolling({'index': 3}).sum())
+
 
 if __name__ == "__main__":
     test = TestFileStore()
     # test.test_store_data()
     # test.test_update_data()
     # test.test_append_data()
-    test.test_backup()
+    # test.test_backup()
+    test.test_get_dataset_evaluate()
 

@@ -15,18 +15,16 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 3.8',
     ],
-    keywords='Files Xarray Handler Netcdf4 Store Read Write Append Update',
+    keywords='Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup',
     packages=[
         'store_core',
         'store_core.data_handler',
-        'store_core.netcdf_handler',
         'store_core.base_handler',
         'tests'
     ],
     install_requires=[
         'pandas',
         'xarray',
-        'netCDF4',
         'numpy',
         'loguru',
         'dask',

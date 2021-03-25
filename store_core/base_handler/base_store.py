@@ -28,6 +28,10 @@ class BaseStore:
         pass
 
     @abstractmethod
+    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+        pass
+
+    @abstractmethod
     def update_from_backup(self, *args, **kwargs):
         pass
 
