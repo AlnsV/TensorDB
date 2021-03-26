@@ -8,7 +8,6 @@ from store_core.data_handler.files_store import FilesStore
 from bitacore.relational_handler.database_bitacore_handler import ProviderDatabase
 from bitacore.relational_handler.transform_normalized_data import transform_2d_time_series_normalized_to_dataset
 
-
 default_min_date = '1990-01-01'
 
 
@@ -16,6 +15,7 @@ class FileDB(FilesStore):
     """
     TODO: Add a decorator or a method to simplify the download data from the provider
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.provider_database = ProviderDatabase()
@@ -112,9 +112,50 @@ class FileDB(FilesStore):
             **kwargs
         )
 
+    def upsert_prices_split_return(self,
+                                   path: Union[str, List],
+                                   *args,
+                                   **kwargs):
 
+        prices_unadjusted = self.get_dataset(path='Prices Unadjusted', *args, **kwargs)
+        split_adjustment_factor = self.get_dataset(path='Split Adjustment Factor', *args, **kwargs)
 
+        start_date = prices_unadjusted.coords['dates'][0].values
+        securities_to_update = split_adjustment_factor.sel(index=split_adjustment_factor.coords['dates'] > start_date)
+        securities_to_update = securities_to_update.coords['security_id'][
+            (securities_to_update != 1).any(axis=0).to_array().values[0]
+        ]
 
+        inv_pos = list(range(prices_unadjusted.sizes['dates'] - 1, -1, -1))
+        historical_split_cum = split_adjustment_factor.isel(dates=inv_pos).cumprod().isel(dates=inv_pos)
+
+        prices_split_return = prices_unadjusted.sel(
+            security_id=securities_to_update
+        ) / historical_split_cum.sel(
+            security_id=securities_to_update
+        )
+
+        handler = self.get_handler(
+            path=path,
+            **kwargs
+        )
+        if prices_split_return.sizes['security_id'] > 0:
+            handler.update_data(
+                new_data=prices_split_return.sel(
+                    dates=prices_split_return.coords['dates'] <= start_date,
+                    security_id=securities_to_update
+                ),
+                *args,
+                **kwargs
+            )
+
+        handler.append_data(
+            new_data=prices_split_return.sel(
+                dates=prices_split_return.coords['dates'] > start_date,
+            ),
+            *args,
+            **kwargs
+        )
 
 
 
