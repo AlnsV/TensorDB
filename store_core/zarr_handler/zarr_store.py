@@ -178,9 +178,7 @@ class ZarrStore(BaseStore):
             1) Add a mechanism to avoid download unnecessary data. My recommendation are two things:
                 a) Add the last_valid_date of the general folder as metadata in the file, with this we can avoid
                     unnecessaries check of the partitions (which can be a lot)
-                b) Check if the last_modified_date of S3 is bigger than the last_modified_date of the internal file
-                    if that is the case download the partition in the other case not
-            2) Add a parameter called force_download which will be useful to undo any local modification
+            2) Add a parameter called force_update which will be useful to undo any local modification
 
         The to do things are only useful to work in a set of services without unified disk
         """
