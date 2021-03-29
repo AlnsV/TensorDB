@@ -234,34 +234,6 @@ class ZarrStore(BaseStore):
         if backup_date == backup_date_s3:
             return "equal"
 
-    def _update_from_backup(self,
-                            last_backup_dates_s3: Dict[str, str],
-                            last_backup_dates: Dict[str, str],
-                            **kwargs):
-        files_names = self.s3_handler.s3.list_objects(
-            Bucket=self.bucket_name,
-            Prefix=self.path
-        )
-        os.makedirs(self.local_path, exist_ok=True)
-        files_modified = [
-            dict(
-                bucket_name=self.bucket_name,
-                local_path=os.path.join(self.base_path, obj['Key']),
-                s3_path=obj['Key'].replace('\\', '/'),
-                **kwargs
-            )
-            for obj in files_names['Contents']
-            if (
-                    obj['Key'][-1] != '/' and
-                    last_backup_dates_s3.get(obj['Key'], '0') == last_backup_dates.get(obj['Key'], '0')
-            )
-        ]
-        if len(files_modified) == 0:
-            return False
-
-        self.s3_handler.download_files(files_modified)
-        return True
-
     def update_from_backup(self,
                            force_update_from_backup: bool = False,
                            raise_error_missing_backup: bool = True,
@@ -272,19 +244,19 @@ class ZarrStore(BaseStore):
 
         force_update_from_backup = force_update_from_backup | (not os.path.exists(self.local_path))
 
-        if force_update_from_backup:
-            return self._update_from_backup(last_backup_dates={}, last_backup_dates_s3={}, **kwargs)
-
         is_equal = self.equal_to_backup()
-        if is_equal == 'equal':
-            return False
-        if is_equal == 'not backup':
-            if raise_error_missing_backup:
-                raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
-            return False
+        if not force_update_from_backup:
+            if is_equal == 'equal':
+                return False
+            if is_equal == 'not backup':
+                if raise_error_missing_backup:
+                    raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
+                return False
 
-        with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
-            last_backup_dates = json.load(json_file)['zchunks_backup_metadata']
+        last_backup_dates = {}
+        if os.path.exists(os.path.join(self.local_path, '.zattrs')):
+            with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
+                last_backup_dates = json.load(json_file)['zchunks_backup_metadata']
 
         self.s3_handler.download_file(
             bucket_name=self.bucket_name,
@@ -296,11 +268,24 @@ class ZarrStore(BaseStore):
         with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
             last_backup_dates_s3 = json.load(json_file)['zchunks_backup_metadata']
 
-        return self._update_from_backup(
-            last_backup_dates=last_backup_dates,
-            last_backup_dates_s3=last_backup_dates_s3,
-            **kwargs
-        )
+        files_to_download = [
+            dict(
+                bucket_name=self.bucket_name,
+                local_path=os.path.join(self.base_path, path),
+                s3_path=path,
+                **kwargs
+            )
+            for path, date in last_backup_dates_s3.items()
+            if path != os.path.join(self.path, '.zattrs') and (
+                    force_update_from_backup or date != last_backup_dates.get(path, '')
+            )
+        ]
+        if len(files_to_download) == 0:
+            return False
+
+        self.s3_handler.download_files(files_to_download)
+
+        return True
 
     def close(self, *args, **kwargs):
         self.backup(*args, **kwargs)
