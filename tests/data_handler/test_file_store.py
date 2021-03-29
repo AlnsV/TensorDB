@@ -79,11 +79,13 @@ class TestFileStore:
         file_store.store_data(new_data=arr, path='data_one')
         handler = file_store.get_handler(path='data_one')
 
-        assert handler.check_modification
-        handler.backup()
-        handler.update_from_backup()
-
         assert handler.s3_handler is not None
+        assert handler.check_modification
+
+        handler.backup()
+        assert not handler.update_from_backup()
+        assert handler.update_from_backup(force_update_from_backup=True)
+
         assert compare_dataset(file_store.get_dataset(path='data_one').sel(arr.coords), arr)
         logger.info(handler.get_dataset())
 
@@ -102,6 +104,6 @@ if __name__ == "__main__":
     # test.test_store_data()
     # test.test_update_data()
     # test.test_append_data()
-    # test.test_backup()
-    test.test_get_dataset_evaluate()
+    test.test_backup()
+    # test.test_get_dataset_evaluate()
 

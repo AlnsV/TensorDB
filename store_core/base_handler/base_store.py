@@ -47,6 +47,10 @@ class BaseStore:
     def close(self, *args, **kwargs):
         pass
 
+    @abstractmethod
+    def equal_to_backup(self, *args, **kwargs):
+        pass
+
     @property
     def local_path(self):
         return os.path.join("" if self.base_path is None else self.base_path, self.path)

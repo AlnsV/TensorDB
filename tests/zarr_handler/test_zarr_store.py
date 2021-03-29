@@ -97,7 +97,7 @@ class TestZarrStore:
 
 if __name__ == "__main__":
     test = TestZarrStore()
-    # test.test_store_data()
+    test.test_store_data()
     # test.test_append_data()
     # test.test_update_data()
-    test.test_backup()
+    # test.test_backup()

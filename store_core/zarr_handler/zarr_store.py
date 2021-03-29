@@ -3,6 +3,7 @@ import numpy as np
 import zarr
 import os
 import pandas as pd
+import json
 
 from typing import Dict, List, Any, Union, Callable, Generic
 from loguru import logger
@@ -13,7 +14,10 @@ from store_core.s3_handler.s3_handler import S3Handler
 
 
 class ZarrStore(BaseStore):
-
+    """
+    TODO: The next versions of zarr will add support for the modification dates of the chunks, that will simplify
+        the code of backup, so It is a good idea modify the code after the modification being publish
+    """
     def __init__(self,
                  dims: List[str] = None,
                  name: str = "data",
@@ -51,7 +55,7 @@ class ZarrStore(BaseStore):
                     **kwargs):
 
         if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_data=False, *args, **kwargs)
+            self.update_from_backup(raise_error_missing_backup=False, *args, **kwargs)
 
         if not os.path.exists(self.local_path):
             return self.store_data(new_data=new_data, *args, **kwargs)
@@ -92,7 +96,7 @@ class ZarrStore(BaseStore):
               but I suppose that the block updating is ideal only when the new_data represent a big % of the entire data
         """
         if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_data=True, *args, **kwargs)
+            self.update_from_backup(raise_error_missing_backup=True, *args, **kwargs)
 
         if isinstance(new_data, xarray.Dataset):
             new_data = new_data.to_array()
@@ -111,10 +115,7 @@ class ZarrStore(BaseStore):
         self.update_data(new_data, *args, **kwargs)
         self.append_data(new_data, *args, **kwargs)
 
-    def get_dataset(self,
-                    *args,
-                    **kwargs) -> xarray.Dataset:
-        # self.update_from_backup(*args, **kwargs)
+    def get_dataset(self, *args, **kwargs) -> xarray.Dataset:
         return xarray.open_zarr(
             self.local_path,
             group=self.group,
@@ -123,12 +124,12 @@ class ZarrStore(BaseStore):
         )
 
     def get_chunks_modified_dates(self):
-
-        if not os.path.exists(os.path.join(self.local_path)):
-            return {}
-
         chunks_dates = {}
-        arr_store = zarr.open(self.local_path, mode='r')
+        try:
+            arr_store = zarr.open(self.local_path, mode='r')
+        except zarr.errors.PathNotFoundError:
+            return chunks_dates
+
         for chunk_name in arr_store.chunk_store.keys():
             total_path = os.path.join(self.local_path, chunk_name)
             date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
@@ -144,75 +145,162 @@ class ZarrStore(BaseStore):
             new_data = new_data if self.chunks is None else new_data.chunk(self.chunks)
         return new_data
 
-    def backup(self, *args, **kwargs):
+    def backup(self, overwrite_backup: bool = False, *args, **kwargs) -> bool:
 
-        if not self.check_modification or self.s3_handler is None:
-            return
+        """
+            TODO:
+                1) Simplify the code, probably the best option is create a class to handle the extra metadata
+                    and follow the logic used to update_from_backup
+        """
+
+        if not overwrite_backup:
+            if not self.check_modification or self.s3_handler is None:
+                return False
 
         self.check_modification = False
-        arr_store = zarr.open(self.local_path, mode='r')
-        file_settings = []
+        arr_store = zarr.open(self.local_path, mode='a')
+        files_modified = []
 
         for chunk_name in arr_store.chunk_store.keys():
             total_path = os.path.join(self.local_path, chunk_name)
             modified_date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
 
             upload = False
-            if chunk_name not in self.chunks_modified_dates or modified_date != self.chunks_modified_dates[total_path]:
+            if (
+                    overwrite_backup or
+                    chunk_name not in self.chunks_modified_dates or
+                    modified_date != self.chunks_modified_dates[total_path]
+            ):
                 upload = True
 
             if upload:
-                file_settings.append(dict(
+                files_modified.append(dict(
                     local_path=total_path,
-                    s3_path=os.path.join(self.path, chunk_name),
+                    s3_path=os.path.join(self.path, chunk_name).replace('\\', '/'),
                     bucket_name=self.bucket_name,
                     **kwargs
                 ))
 
-        self.s3_handler.upload_files(file_settings)
-        self.chunks_modified_dates = self.get_chunks_modified_dates()
+        if len(files_modified) > 0:
+            backup_date = str(pd.Timestamp.now())
 
-    def update_from_backup(self, raise_error_missing_data: bool = True, *args, **kwargs):
-        """
-        TODO:
-            1) Add a mechanism to avoid download unnecessary data. My recommendation are two things:
-                a) Add the last_valid_date of the general folder as metadata in the file, with this we can avoid
-                    unnecessaries check of the partitions (which can be a lot)
-            2) Add a parameter called force_update which will be useful to undo any local modification
+            # adding data about the backup, this is useful to avoid download all the information again and again
+            with open(os.path.join(self.local_path, 'zbackup_date.json'), 'w') as json_file:
+                json.dump({'backup_date': backup_date}, json_file)
 
-        The to do things are only useful to work in a set of services without unified disk
-        """
-        if self.s3_handler is None:
-            return
+            zchunks_backup_metadata = arr_store.attrs.get('zchunks_backup_metadata', {})
+            zchunks_backup_metadata.update({
+                file_modified['s3_path']: backup_date
+                for file_modified in files_modified
+            })
+            arr_store.attrs['zchunks_backup_metadata'] = zchunks_backup_metadata
 
+            for name in ['zbackup_date.json', '.zattrs']:
+                files_modified.append(dict(
+                    local_path=os.path.join(self.local_path, name),
+                    s3_path=os.path.join(self.path, name).replace('\\', '/'),
+                    bucket_name=self.bucket_name,
+                    **kwargs
+                ))
+
+            # uploading all the files in parallel
+            self.s3_handler.upload_files(files_modified)
+
+            # update the chunks modified dates
+            self.chunks_modified_dates = self.get_chunks_modified_dates()
+
+        return True
+
+    def equal_to_backup(self, *args, **kwargs) -> str:
+        if not os.path.exists(os.path.join(self.local_path, 'zbackup_date.json')):
+            return "not equal"
+
+        with open(os.path.join(self.local_path, 'zbackup_date.json'), 'r') as json_file:
+            backup_date = json.load(json_file)['backup_date']
+
+        try:
+            self.s3_handler.download_file(
+                bucket_name=self.bucket_name,
+                local_path=os.path.join(self.local_path, 'zbackup_date.json'),
+                s3_path=os.path.join(self.path, 'zbackup_date.json').replace('\\', '/'),
+                max_concurrency=1,
+            )
+        except KeyError:
+            return "not backup"
+
+        with open(os.path.join(self.local_path, 'zbackup_date.json'), 'r') as json_file:
+            backup_date_s3 = json.load(json_file)['backup_date']
+
+        if backup_date == backup_date_s3:
+            return "equal"
+
+    def _update_from_backup(self,
+                            last_backup_dates_s3: Dict[str, str],
+                            last_backup_dates: Dict[str, str],
+                            **kwargs):
         files_names = self.s3_handler.s3.list_objects(
             Bucket=self.bucket_name,
             Prefix=self.path
         )
-
-        if 'Contents' not in files_names:
-            if raise_error_missing_data:
-                raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
-            return
-
         os.makedirs(self.local_path, exist_ok=True)
-
-        file_settings = []
-
-        for obj in files_names['Contents']:
-            local_path = os.path.join(self.base_path, obj['Key'])
-
-            if obj['Key'][-1] == '/':
-                continue
-
-            file_settings.append(dict(
+        files_modified = [
+            dict(
                 bucket_name=self.bucket_name,
-                local_path=local_path,
-                s3_path=obj['Key'],
+                local_path=os.path.join(self.base_path, obj['Key']),
+                s3_path=obj['Key'].replace('\\', '/'),
                 **kwargs
-            ))
+            )
+            for obj in files_names['Contents']
+            if (
+                    obj['Key'][-1] != '/' and
+                    last_backup_dates_s3.get(obj['Key'], '0') == last_backup_dates.get(obj['Key'], '0')
+            )
+        ]
+        if len(files_modified) == 0:
+            return False
 
-        self.s3_handler.download_files(file_settings)
+        self.s3_handler.download_files(files_modified)
+        return True
+
+    def update_from_backup(self,
+                           force_update_from_backup: bool = False,
+                           raise_error_missing_backup: bool = True,
+                           *args,
+                           **kwargs) -> bool:
+        if self.s3_handler is None:
+            return False
+
+        force_update_from_backup = force_update_from_backup | (not os.path.exists(self.local_path))
+
+        if force_update_from_backup:
+            return self._update_from_backup(last_backup_dates={}, last_backup_dates_s3={}, **kwargs)
+
+        is_equal = self.equal_to_backup()
+        if is_equal == 'equal':
+            return False
+        if is_equal == 'not backup':
+            if raise_error_missing_backup:
+                raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
+            return False
+
+        with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
+            last_backup_dates = json.load(json_file)['zchunks_backup_metadata']
+
+        self.s3_handler.download_file(
+            bucket_name=self.bucket_name,
+            local_path=os.path.join(self.local_path, '.zattrs'),
+            s3_path=os.path.join(self.path, '.zattrs').replace('\\', '/'),
+            **kwargs
+        )
+
+        with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
+            last_backup_dates_s3 = json.load(json_file)['zchunks_backup_metadata']
+
+        return self._update_from_backup(
+            last_backup_dates=last_backup_dates,
+            last_backup_dates_s3=last_backup_dates_s3,
+            **kwargs
+        )
 
     def close(self, *args, **kwargs):
         self.backup(*args, **kwargs)

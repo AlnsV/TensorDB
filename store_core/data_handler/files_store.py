@@ -108,6 +108,10 @@ class FilesStore:
                     path: Union[str, List],
                     *args,
                     **kwargs) -> xarray.Dataset:
+        """
+        TODO: Add a boolean parameter that allow the user control if the dataset must be always check if it is equal
+            to the backup
+        """
 
         file_setting = self.get_file_setting(path)
         if 'get_dataset' in file_setting:
