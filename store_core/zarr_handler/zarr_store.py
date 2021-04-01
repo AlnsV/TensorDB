@@ -25,9 +25,8 @@ class ZarrStore(BaseStore):
                  group: str = None,
                  s3_handler: Union[S3Handler, Dict] = None,
                  bucket_name: str = None,
-                 *args,
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.dims = dims
         self.name = name
         self.chunks = chunks
@@ -42,23 +41,21 @@ class ZarrStore(BaseStore):
 
     def store_data(self,
                    new_data: Union[xarray.DataArray, xarray.Dataset],
-                   *args,
                    **kwargs):
 
         new_data = self.transform_to_dataset(new_data)
-        new_data.to_zarr(self.local_path, group=self.group, mode='w', *args, **kwargs)
+        new_data.to_zarr(self.local_path, group=self.group, mode='w', **kwargs)
         self.check_modification = True
 
     def append_data(self,
                     new_data: Union[xarray.DataArray, xarray.Dataset],
-                    *args,
                     **kwargs):
 
         if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_backup=False, *args, **kwargs)
+            self.update_from_backup(raise_error_missing_backup=False, **kwargs)
 
         if not os.path.exists(self.local_path):
-            return self.store_data(new_data=new_data, *args, **kwargs)
+            return self.store_data(new_data=new_data, **kwargs)
 
         new_data = self.transform_to_dataset(new_data)
         act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
@@ -79,7 +76,6 @@ class ZarrStore(BaseStore):
                 self.local_path,
                 append_dim=dim,
                 compute=True,
-                *args,
                 **kwargs
             )
 
@@ -87,7 +83,6 @@ class ZarrStore(BaseStore):
 
     def update_data(self,
                     new_data: Union[xarray.DataArray, xarray.Dataset],
-                    *args,
                     **kwargs):
         """
         TODO: Avoid loading the entire new data in memory
@@ -96,7 +91,7 @@ class ZarrStore(BaseStore):
               but I suppose that the block updating is ideal only when the new_data represent a big % of the entire data
         """
         if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_backup=True, *args, **kwargs)
+            self.update_from_backup(raise_error_missing_backup=True, **kwargs)
 
         if isinstance(new_data, xarray.Dataset):
             new_data = new_data.to_array()
@@ -111,30 +106,31 @@ class ZarrStore(BaseStore):
         arr.set_mask_selection(bitmask, new_data.values.ravel())
         self.check_modification = True
 
-    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
-        self.update_data(new_data, *args, **kwargs)
-        self.append_data(new_data, *args, **kwargs)
+    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+        self.update_data(new_data, **kwargs)
+        self.append_data(new_data, **kwargs)
 
-    def get_dataset(self, *args, **kwargs) -> xarray.Dataset:
+    def get_dataset(self, **kwargs) -> xarray.Dataset:
+        if not self.exist_dataset(**kwargs):
+            raise FileNotFoundError(f"The file with local path: {self.local_path} "
+                                    f"does not exist and there is not backup")
         return xarray.open_zarr(
             self.local_path,
             group=self.group,
-            *args,
             **kwargs
         )
 
     def get_chunks_modified_dates(self):
-        chunks_dates = {}
-        try:
-            arr_store = zarr.open(self.local_path, mode='r')
-        except zarr.errors.PathNotFoundError:
-            return chunks_dates
+        if not self.exist_dataset():
+            return {}
 
-        for chunk_name in arr_store.chunk_store.keys():
-            total_path = os.path.join(self.local_path, chunk_name)
-            date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
-            chunks_dates[total_path] = date
-
+        arr_store = zarr.open(self.local_path, mode='r')
+        chunks_dates = {
+            os.path.join(self.local_path, chunk_name): pd.to_datetime(
+                datetime.fromtimestamp(os.path.getmtime(os.path.join(self.local_path, chunk_name)))
+            )
+            for chunk_name in arr_store.chunk_store.keys()
+        }
         return chunks_dates
 
     def transform_to_dataset(self, new_data) -> xarray.Dataset:
@@ -145,7 +141,7 @@ class ZarrStore(BaseStore):
             new_data = new_data if self.chunks is None else new_data.chunk(self.chunks)
         return new_data
 
-    def backup(self, overwrite_backup: bool = False, *args, **kwargs) -> bool:
+    def backup(self, overwrite_backup: bool = False, **kwargs) -> bool:
 
         """
             TODO:
@@ -153,9 +149,11 @@ class ZarrStore(BaseStore):
                     and follow the logic used to update_from_backup
         """
 
-        if not overwrite_backup:
-            if not self.check_modification or self.s3_handler is None:
-                return False
+        if self.s3_handler is None:
+            return False
+
+        if not overwrite_backup and not self.check_modification:
+            return False
 
         self.check_modification = False
         arr_store = zarr.open(self.local_path, mode='a')
@@ -164,22 +162,15 @@ class ZarrStore(BaseStore):
         for chunk_name in arr_store.chunk_store.keys():
             total_path = os.path.join(self.local_path, chunk_name)
             modified_date = pd.to_datetime(datetime.fromtimestamp(os.path.getmtime(total_path)))
+            if not overwrite_backup and self.chunks_modified_dates.get(total_path, '') == modified_date:
+                continue
 
-            upload = False
-            if (
-                    overwrite_backup or
-                    chunk_name not in self.chunks_modified_dates or
-                    modified_date != self.chunks_modified_dates[total_path]
-            ):
-                upload = True
-
-            if upload:
-                files_modified.append(dict(
-                    local_path=total_path,
-                    s3_path=os.path.join(self.path, chunk_name).replace('\\', '/'),
-                    bucket_name=self.bucket_name,
-                    **kwargs
-                ))
+            files_modified.append(dict(
+                local_path=total_path,
+                s3_path=os.path.join(self.path, chunk_name).replace('\\', '/'),
+                bucket_name=self.bucket_name,
+                **kwargs
+            ))
 
         if len(files_modified) > 0:
             backup_date = str(pd.Timestamp.now())
@@ -211,7 +202,7 @@ class ZarrStore(BaseStore):
 
         return True
 
-    def equal_to_backup(self, *args, **kwargs) -> str:
+    def equal_to_backup(self, **kwargs) -> str:
         if not os.path.exists(os.path.join(self.local_path, 'zbackup_date.json')):
             return "not equal"
 
@@ -224,6 +215,7 @@ class ZarrStore(BaseStore):
                 local_path=os.path.join(self.local_path, 'zbackup_date.json'),
                 s3_path=os.path.join(self.path, 'zbackup_date.json').replace('\\', '/'),
                 max_concurrency=1,
+                **kwargs
             )
         except KeyError:
             return "not backup"
@@ -237,7 +229,6 @@ class ZarrStore(BaseStore):
     def update_from_backup(self,
                            force_update_from_backup: bool = False,
                            raise_error_missing_backup: bool = True,
-                           *args,
                            **kwargs) -> bool:
         if self.s3_handler is None:
             return False
@@ -254,7 +245,7 @@ class ZarrStore(BaseStore):
                 return False
 
         last_backup_dates = {}
-        if os.path.exists(os.path.join(self.local_path, '.zattrs')):
+        if not force_update_from_backup and os.path.exists(os.path.join(self.local_path, '.zattrs')):
             with open(os.path.join(self.local_path, '.zattrs'), mode='r') as json_file:
                 last_backup_dates = json.load(json_file)['zchunks_backup_metadata']
 
@@ -287,8 +278,13 @@ class ZarrStore(BaseStore):
 
         return True
 
-    def close(self, *args, **kwargs):
-        self.backup(*args, **kwargs)
+    def exist_dataset(self, **kwargs):
+        if os.path.exists(self.local_path):
+            return True
+        return self.update_from_backup(force_update_from_backup=True, raise_error_missing_backup=False, **kwargs)
+
+    def close(self, **kwargs):
+        self.backup(**kwargs)
 
 
 

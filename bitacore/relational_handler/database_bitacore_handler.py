@@ -59,7 +59,6 @@ class ProviderDatabase(object):
                                      value_name: str,
                                      time_name: str,
                                      end_date: Union[str, pd.Timestamp] = None,
-                                     *args,
                                      **kwargs) -> pd.DataFrame:
         start_date = start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d')
         end_date_filter = ''
@@ -85,7 +84,6 @@ class ProviderDatabase(object):
                                  from_to_name: str = 'from_date',
                                  to_date_name: str = 'to_date',
                                  end_date: Union[str, pd.Timestamp] = None,
-                                 *args,
                                  **kwargs) -> pd.DataFrame:
         start_date = start_date if isinstance(start_date, str) else start_date.strftime('%Y-%m-%d')
         end_date_filter = ''
@@ -112,7 +110,6 @@ class ProviderDatabase(object):
                      value_field_name: str = "value",
                      data_level: str = "company",
                      end_date: Union[str, pd.Timestamp] = None,
-                     *args,
                      **kwargs) -> pd.DataFrame:
         """
             Gets the ESG ratings data of all the components of
@@ -147,3 +144,16 @@ class ProviderDatabase(object):
 
         data = self.execute_query(query, 'get_esg_data')
         return data
+
+    def get_country_data(self, **kwargs):
+        pass
+
+    def get_sector_data(self, **kwargs):
+        pass
+
+    def get_ipo_date(self, **kwargs):
+        pass
+
+    def get_security_identifiers(self):
+        pass
+

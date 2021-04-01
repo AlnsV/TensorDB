@@ -35,7 +35,6 @@ class FilesStore:
                  use_env: bool = False,
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
                  max_files_in_disk: int = 30,
-                 *args,
                  **kwargs):
         """
 
@@ -85,7 +84,7 @@ class FilesStore:
         self.open_base_store[local_path]['num_use'] += 1
         return self.open_base_store[local_path]['data_handler']
 
-    def get_dataset_from_formula(self, path, *args, **kwargs):
+    def get_dataset_from_formula(self, path, **kwargs):
         file_setting = self.get_file_setting(path)
         formula = file_setting['formula']
         data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
@@ -94,7 +93,6 @@ class FilesStore:
             name_data_field = formula[data_fields_intervals[i] + 1: data_fields_intervals[i + 1]]
             data_fields[name_data_field] = self.get_dataset(
                 name_data_field,
-                *args,
                 **kwargs
             )
 
@@ -106,7 +104,6 @@ class FilesStore:
 
     def get_dataset(self,
                     path: Union[str, List],
-                    *args,
                     **kwargs) -> xarray.Dataset:
         """
         TODO: Add a boolean parameter that allow the user control if the dataset must be always check if it is equal
@@ -115,10 +112,10 @@ class FilesStore:
 
         file_setting = self.get_file_setting(path)
         if 'get_dataset' in file_setting:
-            return getattr(self, file_setting['get_dataset'])(*args, **kwargs)
+            return getattr(self, file_setting['get_dataset'])(**kwargs)
 
         if file_setting.get('on_fly', False):
-            return self.get_dataset_from_formula(path, *args, **kwargs)
+            return self.get_dataset_from_formula(path, **kwargs)
 
         return self.get_handler(
             path=path,
@@ -127,7 +124,6 @@ class FilesStore:
 
     def append_data(self,
                     path: Union[str, List],
-                    *args,
                     **kwargs):
 
         file_setting = self.get_file_setting(path)
@@ -135,7 +131,6 @@ class FilesStore:
             return getattr(self, file_setting['append_data'])(
                 file_setting=file_setting,
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -143,20 +138,17 @@ class FilesStore:
             path=path,
             **kwargs
         ).append_data(
-            *args,
             **kwargs
         )
 
     def update_data(self,
                     path: Union[str, List],
-                    *args,
                     **kwargs):
 
         file_setting = self.get_file_setting(path)
         if 'update_data' in file_setting:
             return getattr(self, file_setting['update_data'])(
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -164,20 +156,17 @@ class FilesStore:
             path=path,
             **kwargs
         ).update_data(
-            *args,
             **kwargs
         )
 
     def store_data(self,
                    path: Union[str, List],
-                   *args,
                    **kwargs):
 
         file_setting = self.get_file_setting(path)
         if 'store_data' in file_setting:
             return getattr(self, file_setting['store_data'])(
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -185,13 +174,11 @@ class FilesStore:
             path=path,
             **kwargs
         ).store_data(
-            *args,
             **kwargs
         )
 
     def backup(self,
                path: Union[str, List],
-               *args,
                **kwargs):
 
         file_setting = self.get_file_setting(path)
@@ -199,7 +186,6 @@ class FilesStore:
             return getattr(self, file_setting['backup'])(
                 file_setting=file_setting,
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -207,13 +193,11 @@ class FilesStore:
             path=path,
             **kwargs
         ).backup(
-            *args,
             **kwargs
         )
 
     def update_from_backup(self,
                            path: Union[str, List],
-                           *args,
                            **kwargs):
 
         file_setting = self.get_file_setting(path)
@@ -221,7 +205,6 @@ class FilesStore:
             return getattr(self, file_setting['update_from_backup'])(
                 file_setting=file_setting,
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -229,20 +212,17 @@ class FilesStore:
             path=path,
             **kwargs
         ).update_from_backup(
-            *args,
             **kwargs
         )
 
     def close(self,
               path: Union[str, List],
-              *args,
               **kwargs):
 
         file_setting = self.get_file_setting(path)
         if 'close' in file_setting:
             return getattr(self, file_setting['close'])(
                 path=path,
-                *args,
                 **kwargs
             )
 
@@ -250,7 +230,6 @@ class FilesStore:
             path=path,
             **kwargs
         ).close(
-            *args,
             **kwargs
         )
 
@@ -264,6 +243,16 @@ class FilesStore:
             return os.path.join(self.base_path, file_setting.get('extra_path', ''), *path)
 
         return os.path.join(file_setting.get('extra_path', ''), *path)
+
+    def exist_dataset(self,
+                      path: str,
+                      **kwargs):
+        return self.get_handler(
+            path,
+            **kwargs
+        ).exist_dataset(
+            **kwargs
+        )
 
     def add_file_setting(self, name, file_setting):
         self._files_settings[name] = file_setting

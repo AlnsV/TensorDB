@@ -39,7 +39,6 @@ class S3Handler:
                       local_path: str,
                       s3_path: str = None,
                       max_concurrency: int = None,
-                      *args,
                       **kwargs):
         s3_path = (os.path.dirname(local_path) if s3_path is None else s3_path).replace("\\", "/")
 
@@ -65,7 +64,6 @@ class S3Handler:
                     local_path: str,
                     s3_path: str = None,
                     max_concurrency: int = None,
-                    *args,
                     **kwargs):
         s3_path = (os.path.dirname(local_path) if s3_path is None else s3_path).replace("\\", "/")
         max_concurrency = self.max_concurrency if max_concurrency is None else max_concurrency
@@ -76,17 +74,16 @@ class S3Handler:
             Config=TransferConfig(max_concurrency=max_concurrency)
         )
 
-    def get_head_object(self, bucket_name: str, s3_path: str, *args, **kwargs) -> Dict[str, Any]:
+    def get_head_object(self, bucket_name: str, s3_path: str, **kwargs) -> Dict[str, Any]:
         return self.s3.head_object(Bucket=bucket_name, Key=s3_path.replace("\\", "/"))
 
-    def get_etag(self, bucket_name: str, s3_path: str, *args, **kwargs) -> str:
+    def get_etag(self, bucket_name: str, s3_path: str, **kwargs) -> str:
         return self.get_head_object(bucket_name, s3_path.replace("\\", "/"))['ETag']
 
     def get_last_modified_date(self,
                                bucket_name: str,
                                s3_path: str,
                                as_string: bool = False,
-                               *args,
                                **kwargs) -> Union[pd.Timestamp, str]:
         date = self.get_head_object(bucket_name, s3_path.replace("\\", "/"))['LastModified']
         if as_string:
