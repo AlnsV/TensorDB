@@ -24,12 +24,11 @@ class S3Handler:
         )
         self.max_concurrency = os.cpu_count()
 
-    @staticmethod
-    def _multi_process_function(func: Callable, arguments: List[Dict[str, str]]):
+    def _multi_process_function(self, func: Callable, arguments: List[Dict[str, str]]):
         """
         TODO: Simplify or improve this code, probably would be better to use map
         """
-        p = ThreadPool(processes=os.cpu_count())
+        p = ThreadPool(processes=self.max_concurrency)
         futures = [p.apply_async(func=func, kwds=kwds) for kwds in arguments]
         for future in futures:
             future.get()
@@ -54,10 +53,10 @@ class S3Handler:
         )
 
     def download_files(self, files_settings: List[Dict[str, str]]):
-        S3Handler._multi_process_function(self.download_file, files_settings)
+        self._multi_process_function(self.download_file, files_settings)
 
     def upload_files(self, files_settings: List[Dict[str, str]]):
-        S3Handler._multi_process_function(self.upload_file, files_settings)
+        self._multi_process_function(self.upload_file, files_settings)
 
     def upload_file(self,
                     bucket_name: str,

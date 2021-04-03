@@ -54,7 +54,7 @@ class TestZarrStore:
     def test_store_data(self):
         a = get_default_zarr_store()
         a.store_data(TestZarrStore.arr)
-        dataset = a.get_dataset()
+        dataset = a.get_data_array()
         assert compare_dataset(dataset, TestZarrStore.arr)
 
     def test_append_data(self):
@@ -72,14 +72,14 @@ class TestZarrStore:
             a.append_data(arr2.isel(index=[i]))
 
         total_data = xarray.concat([arr, arr2], dim='index')
-        dataset = a.get_dataset()
+        dataset = a.get_data_array()
         assert compare_dataset(dataset, total_data)
 
     def test_update_data(self):
         self.test_store_data()
         a = get_default_zarr_store()
         a.update_data(TestZarrStore.arr + 5)
-        dataset = a.get_dataset()
+        dataset = a.get_data_array()
         assert compare_dataset(dataset, TestZarrStore.arr + 5)
 
     def test_backup(self):
@@ -91,7 +91,7 @@ class TestZarrStore:
         a.backup()
         shutil.rmtree(a.local_path)
         a.update_from_backup()
-        dataset = a.get_dataset()
+        dataset = a.get_data_array()
         assert compare_dataset(dataset, TestZarrStore.arr)
 
 

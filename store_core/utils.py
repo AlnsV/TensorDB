@@ -70,7 +70,8 @@ def compare_dataset(a, b):
     for name, coord in a.coords.items():
         equals &= coord.equals(b.coords[name])
 
-    a = a.to_array().loc[b.coords]
+    if isinstance(a, xarray.Dataset):
+        a = a.to_array().loc[b.coords]
     equals &= np.allclose(a.values, b.values, equal_nan=True)
     return equals
 

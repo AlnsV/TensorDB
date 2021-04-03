@@ -53,6 +53,16 @@ class ProviderDatabase(object):
 
         return data
 
+    def get_file_settings(self, name: str):
+        query = f"""
+            SELECT 
+                a.file_settings as file_settings
+            FROM m_data_field AS a
+            WHERE name = '{name}'
+        """
+        data = self.execute_query(query, 'get_file_settings')
+        return data.iloc[0, 0]
+
     def get_generic_time_series_data(self,
                                      start_date: Union[str, pd.Timestamp],
                                      table_name: str,

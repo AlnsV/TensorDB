@@ -34,15 +34,17 @@ class FilesStore:
                  base_path: str = None,
                  use_env: bool = False,
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
-                 max_files_in_disk: int = 30,
+                 max_files_on_disk: int = 30,
                  **kwargs):
         """
 
         """
+        self.env_mode = os.getenv("ENV_MODE") if use_env else ""
         self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
+        self.base_path = os.path.join(self.base_path, self.env_mode)
         self._files_settings = files_settings
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
-        self.max_files_in_disk = max_files_in_disk
+        self.max_files_on_disk = max_files_on_disk
 
         if use_env:
             self.base_path = os.path.join(self.base_path, os.getenv("ENV_MODE"))
@@ -55,13 +57,8 @@ class FilesStore:
 
         self.__dict__.update(**kwargs)
 
-    @property
-    def file_settings(self):
-        return self._files_settings
-
-    def get_file_setting(self, path):
-        file_setting = os.path.basename(os.path.normpath(path))
-        return self._files_settings.get(file_setting, self._files_settings.get('generic', {}))
+    def get_file_setting(self, path) -> Dict:
+        return self._files_settings[os.path.basename(os.path.normpath(path))]
 
     def get_handler(self,
                     path: Union[str, List],
@@ -84,14 +81,14 @@ class FilesStore:
         self.open_base_store[local_path]['num_use'] += 1
         return self.open_base_store[local_path]['data_handler']
 
-    def get_dataset_from_formula(self, path, **kwargs):
+    def get_data_array_from_formula(self, path, **kwargs):
         file_setting = self.get_file_setting(path)
         formula = file_setting['formula']
         data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
         data_fields = {}
         for i in range(0, len(data_fields_intervals), 2):
             name_data_field = formula[data_fields_intervals[i] + 1: data_fields_intervals[i + 1]]
-            data_fields[name_data_field] = self.get_dataset(
+            data_fields[name_data_field] = self.get_data_array(
                 name_data_field,
                 **kwargs
             )
@@ -102,25 +99,21 @@ class FilesStore:
         dataset_formula = eval(formula)
         return dataset_formula
 
-    def get_dataset(self,
-                    path: Union[str, List],
-                    **kwargs) -> xarray.Dataset:
-        """
-        TODO: Add a boolean parameter that allow the user control if the dataset must be always check if it is equal
-            to the backup
-        """
+    def get_data_array(self,
+                       path: Union[str, List],
+                       **kwargs) -> xarray.DataArray:
 
         file_setting = self.get_file_setting(path)
-        if 'get_dataset' in file_setting:
-            return getattr(self, file_setting['get_dataset'])(**kwargs)
+        if 'get_data_array' in file_setting:
+            return getattr(self, file_setting['get_data_array'])(**kwargs)
 
         if file_setting.get('on_fly', False):
-            return self.get_dataset_from_formula(path, **kwargs)
+            return self.get_data_array_from_formula(path, **kwargs)
 
         return self.get_handler(
             path=path,
             **kwargs
-        ).get_dataset()
+        ).get_data_array()
 
     def append_data(self,
                     path: Union[str, List],

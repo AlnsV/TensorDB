@@ -15,8 +15,11 @@ from store_core.s3_handler.s3_handler import S3Handler
 
 class ZarrStore(BaseStore):
     """
-    TODO: The next versions of zarr will add support for the modification dates of the chunks, that will simplify
-        the code of backup, so It is a good idea modify the code after the modification being publish
+    TODO:
+        1) The next versions of zarr will add support for the modification dates of the chunks, that will simplify
+            the code of backup, so It is a good idea modify the code after the modification being published
+        2) Add the zarr process synchronizer or fasteners module to avoid that multiple process read, backup or write
+            at the same time in the same chunk, zarr already has this option, the problem is with the backup options
     """
     def __init__(self,
                  dims: List[str] = None,
@@ -31,11 +34,11 @@ class ZarrStore(BaseStore):
         self.name = name
         self.chunks = chunks
         self.group = group
+        self.bucket_name = bucket_name
         self.s3_handler = s3_handler
         if isinstance(s3_handler, Dict):
             self.s3_handler = S3Handler(**s3_handler) if isinstance(s3_handler, dict) else s3_handler
 
-        self.bucket_name = bucket_name
         self.chunks_modified_dates = self.get_chunks_modified_dates()
         self.check_modification = False
 
@@ -112,13 +115,19 @@ class ZarrStore(BaseStore):
 
     def get_dataset(self, **kwargs) -> xarray.Dataset:
         if not self.exist_dataset(**kwargs):
-            raise FileNotFoundError(f"The file with local path: {self.local_path} "
-                                    f"does not exist and there is not backup")
+            raise FileNotFoundError(
+                f"The file with local path: {self.local_path} "
+                f"does not exist and there is not backup"
+            )
         return xarray.open_zarr(
             self.local_path,
             group=self.group,
             **kwargs
         )
+
+    def get_data_array(self, **kwargs) -> xarray.DataArray:
+        dataset = self.get_dataset(**kwargs)
+        return dataset[self.name]
 
     def get_chunks_modified_dates(self):
         if not self.exist_dataset():
@@ -138,7 +147,7 @@ class ZarrStore(BaseStore):
         new_data = new_data
         if isinstance(new_data, xarray.DataArray):
             new_data = new_data.to_dataset(name=self.name)
-            new_data = new_data if self.chunks is None else new_data.chunk(self.chunks)
+        new_data = new_data if self.chunks is None else new_data.chunk(self.chunks)
         return new_data
 
     def backup(self, overwrite_backup: bool = False, **kwargs) -> bool:

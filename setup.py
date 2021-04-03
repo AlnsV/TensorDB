@@ -32,6 +32,7 @@ setup(
         'dask',
         'boto3',
         'pyyaml',
-        'zarr'
+        'zarr',
+        'fasteners'
     ]
 )

@@ -43,6 +43,10 @@ class BaseStore:
         pass
 
     @abstractmethod
+    def get_data_array(self, **kwargs) -> xarray.DataArray:
+        pass
+
+    @abstractmethod
     def close(self, **kwargs):
         pass
 
