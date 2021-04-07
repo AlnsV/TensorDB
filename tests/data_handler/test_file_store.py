@@ -8,13 +8,17 @@ from config_path.config_root_dir import TEST_DIR_FILES_STORE
 
 def get_default_files_store():
     default_settings = {
-        'dims': ['index', 'columns'],
-        'bucket_name': 'test.bitacore.data.2.0',
-        'data_handler': ZarrStore,
+        'handler': {
+            'dims': ['index', 'columns'],
+            'bucket_name': 'test.bitacore.data.2.0',
+            'data_handler': ZarrStore,
+        },
     }
     evaluate_formula_settings = {
-        'formula': "(`data_one` * `data_two`).rolling({'index': 3}).sum()",
-        'on_fly': True
+        'read': {
+            'method': 'read_from_formula',
+            'formula': "(`data_one` * `data_two`).rolling({'index': 3}).sum()",
+        }
     }
     files_settings = {
         'data_one': default_settings.copy(),
@@ -35,32 +39,32 @@ def get_default_files_store():
 
 
 class TestFileStore:
-    def test_store_data(self):
+    def test_store(self):
         files_store = get_default_files_store()
         arr = create_dummy_array(10, 10)
-        files_store.store_data(new_data=arr, path='data_one')
-        assert compare_dataset(files_store.get_data_array(path='data_one'), arr)
+        files_store.store(new_data=arr, path='data_one')
+        assert compare_dataset(files_store.read(path='data_one'), arr)
 
         arr = create_dummy_array(10, 10)
-        files_store.store_data(new_data=arr, path='data_two')
-        assert compare_dataset(files_store.get_data_array(path='data_two'), arr)
+        files_store.store(new_data=arr, path='data_two')
+        assert compare_dataset(files_store.read(path='data_two'), arr)
 
-    def test_update_data(self):
-        self.test_store_data()
+    def test_update(self):
+        self.test_store()
         files_store = get_default_files_store()
         arr = create_dummy_array(10, 10)
-        files_store.update_data(new_data=arr, path='data_one')
-        assert compare_dataset(files_store.get_data_array(path='data_one'), arr)
+        files_store.update(new_data=arr, path='data_one')
+        assert compare_dataset(files_store.read(path='data_one'), arr)
 
-    def test_append_data(self):
-        self.test_store_data()
+    def test_append(self):
+        self.test_store()
         files_store = get_default_files_store()
 
         arr = create_dummy_array(20, 10)
         arr = arr.sel(
             index=(
                 ~arr.coords['index'].isin(
-                    files_store.get_data_array(
+                    files_store.read(
                         file_setting_id='data_one',
                         path='data_one'
                     ).coords['index']
@@ -69,15 +73,15 @@ class TestFileStore:
         )
 
         for i in range(arr.sizes['index']):
-            files_store.append_data(new_data=arr.isel(index=[i]), path='data_one')
+            files_store.append(new_data=arr.isel(index=[i]), path='data_one')
 
-        assert compare_dataset(files_store.get_data_array(path='data_one').sel(arr.coords), arr)
+        assert compare_dataset(files_store.read(path='data_one').sel(arr.coords), arr)
 
     def test_backup(self):
         files_store = get_default_files_store()
         arr = create_dummy_array(3, 3)
-        files_store.store_data(new_data=arr, path='data_one')
-        handler = files_store.get_handler(path='data_one')
+        files_store.store(new_data=arr, path='data_one')
+        handler = files_store._get_handler(path='data_one')
 
         assert handler.s3_handler is not None
         assert handler.check_modification
@@ -86,24 +90,22 @@ class TestFileStore:
         assert not handler.update_from_backup()
         assert handler.update_from_backup(force_update_from_backup=True)
 
-        assert compare_dataset(files_store.get_data_array(path='data_one').sel(arr.coords), arr)
-        logger.info(handler.get_data_array())
+        assert compare_dataset(files_store.read(path='data_one').sel(arr.coords), arr)
 
-    def test_get_dataset_evaluate(self):
-        self.test_store_data()
+    def test_read_from_formula(self):
+        self.test_store()
         files_store = get_default_files_store()
-
-        data_three = files_store.get_data_array(path='data_three')
-        data_one = files_store.get_data_array(path='data_one')
-        data_two = files_store.get_data_array(path='data_two')
+        data_three = files_store.read(path='data_three')
+        data_one = files_store.read(path='data_one')
+        data_two = files_store.read(path='data_two')
         assert compare_dataset(data_three, (data_one * data_two).rolling({'index': 3}).sum())
 
 
 if __name__ == "__main__":
     test = TestFileStore()
-    # test.test_store_data()
-    # test.test_update_data()
-    # test.test_append_data()
+    # test.test_store()
+    # test.test_update()
+    # test.test_append()
     test.test_backup()
-    # test.test_get_dataset_evaluate()
+    # test.test_read_from_formula()
 

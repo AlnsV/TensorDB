@@ -16,8 +16,12 @@ default_min_date = '1990-01-01'
 class FileDB(FilesStore):
     """
         TODO:
-            Add methods to validate the data, for example should be useful to check the proportion of missing data
+            1) Add methods to validate the data, for example should be useful to check the proportion of missing data
             before save the data
+            2) Add more methods to modify the data like bfill or other xarray methods that can be improved when
+                appending data.
+            3) Separate the logic of the methods like reindex, ffill, etc from the logic of the FileDB, this will make
+                the code more readable
     """
 
     def __init__(self,
@@ -46,44 +50,46 @@ class FileDB(FilesStore):
         split_adjustment_factor = self.read(path='Split Adjustment Factor', **kwargs)
         return prices_unadjusted / split_adjustment_factor.sel(
             dates=prices_unadjusted.coords['dates'][::-1]
-        ).cumprod().sel(
+        ).cumprod(
+            dim='dates'
+        ).sel(
             dates=prices_unadjusted.coords['dates']
         )
 
-    def reindex_array(self,
-                      data: Union[xarray.Dataset, xarray.DataArray],
-                      data_array_reindex_path: str,
-                      coords_to_reindex: List[str],
-                      **kwargs):
+    def reindex(self,
+                data: Union[xarray.Dataset, xarray.DataArray],
+                data_array_reindex_path: str,
+                coords_to_reindex: List[str],
+                **kwargs):
         if data is None:
             return None
         data_array = self.read(path=data_array_reindex_path, **kwargs)
         return data.reindex({coord: data_array.coords[coord] for coord in coords_to_reindex})
 
-    def replace_values_array(self,
-                             data: Union[xarray.Dataset, xarray.DataArray],
-                             data_array_replace_values_path: str,
-                             value_for_replace: Any,
-                             **kwargs):
+    def replace_values(self,
+                       data: Union[xarray.Dataset, xarray.DataArray],
+                       data_array_replace_values_path: str,
+                       value_for_replace: Any,
+                       **kwargs):
         if data is None:
             return None
         data_array = self.read(path=data_array_replace_values_path, **kwargs)
         return data.where(data_array.sel(data.coords), value_for_replace)
 
-    def fill_nan_values_array(self,
-                              data: Union[xarray.Dataset, xarray.DataArray],
-                              value_to_replace_nan: Any,
-                              **kwargs):
+    def fillna(self,
+               data: Union[xarray.Dataset, xarray.DataArray],
+               value_to_replace_nan: Any,
+               **kwargs):
         if data is None:
             return None
 
         return data.fillna(value_to_replace_nan)
 
-    def forward_fill_array(self,
-                           path: str,
-                           data: Union[xarray.Dataset, xarray.DataArray],
-                           dim_forward_fill: str,
-                           **kwargs):
+    def ffill(self,
+              path: str,
+              data: Union[xarray.Dataset, xarray.DataArray],
+              dim_forward_fill: str,
+              **kwargs):
         if data is None:
             return None
         data_concat = data
@@ -127,11 +133,11 @@ class FileDB(FilesStore):
             )
         return data
 
-    def store_generic_table_time_series(self,
-                                        path: Union[str, List],
-                                        data_methods_to_apply: List[str],
-                                        start_date: pd.Timestamp = None,
-                                        **kwargs):
+    def store_generic_time_series(self,
+                                  path: Union[str, List],
+                                  data_methods_to_apply: List[str],
+                                  start_date: pd.Timestamp = None,
+                                  **kwargs):
 
         start_date = default_min_date if start_date is None else start_date
         data = self.apply_data_methods(
@@ -150,10 +156,10 @@ class FileDB(FilesStore):
             **kwargs
         )
 
-    def append_generic_table_time_series(self,
-                                         path: Union[str, List],
-                                         data_methods_to_apply: List[str],
-                                         **kwargs):
+    def append_generic_time_series(self,
+                                   path: Union[str, List],
+                                   data_methods_to_apply: List[str],
+                                   **kwargs):
 
         start_date = self.read(path, **kwargs).coords['dates'][0].values
         data = self.apply_data_methods(
@@ -172,12 +178,12 @@ class FileDB(FilesStore):
             **kwargs
         )
 
-    def update_generic_table_time_series(self,
-                                         path: Union[str, List],
-                                         data_methods_to_apply: List[str],
-                                         start_date: pd.Timestamp,
-                                         end_date: pd.Timestamp,
-                                         **kwargs):
+    def update_generic_time_series(self,
+                                   path: Union[str, List],
+                                   data_methods_to_apply: List[str],
+                                   start_date: pd.Timestamp,
+                                   end_date: pd.Timestamp,
+                                   **kwargs):
 
         data = self.apply_data_methods(
             data_methods_to_apply=data_methods_to_apply,
