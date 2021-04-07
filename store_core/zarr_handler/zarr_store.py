@@ -21,6 +21,7 @@ class ZarrStore(BaseStore):
         2) Add the zarr process synchronizer or fasteners module to avoid that multiple process read, backup or write
             at the same time in the same chunk, zarr already has this option, the problem is with the backup options
     """
+
     def __init__(self,
                  dims: List[str] = None,
                  name: str = "data",
@@ -28,6 +29,7 @@ class ZarrStore(BaseStore):
                  group: str = None,
                  s3_handler: Union[S3Handler, Dict] = None,
                  bucket_name: str = None,
+                 synchronizer: str = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.dims = dims
@@ -36,32 +38,50 @@ class ZarrStore(BaseStore):
         self.group = group
         self.bucket_name = bucket_name
         self.s3_handler = s3_handler
+        self.synchronizer = None
+        if synchronizer is not None:
+            if synchronizer == 'process':
+                self.synchronizer = zarr.sync.ProcessSynchronizer(self.local_path)
+            elif synchronizer == 'thread':
+                self.synchronizer = zarr.sync.ThreadSynchronizer()
+            else:
+                raise ValueError(f"{synchronizer} is not a valid option for the synchronizer")
+
         if isinstance(s3_handler, Dict):
             self.s3_handler = S3Handler(**s3_handler) if isinstance(s3_handler, dict) else s3_handler
 
         self.chunks_modified_dates = self.get_chunks_modified_dates()
         self.check_modification = False
 
-    def store_data(self,
-                   new_data: Union[xarray.DataArray, xarray.Dataset],
-                   **kwargs):
+    def store(self,
+              new_data: Union[xarray.DataArray, xarray.Dataset],
+              encoding: Dict = None,
+              compute: bool = True,
+              consolidated: bool = False,
+              **kwargs):
 
-        new_data = self.transform_to_dataset(new_data)
-        new_data.to_zarr(self.local_path, group=self.group, mode='w', **kwargs)
+        new_data = self._transform_to_dataset(new_data)
+        new_data.to_zarr(
+            self.local_path,
+            group=self.group,
+            mode='w',
+            encoding=encoding,
+            compute=compute,
+            consolidated=consolidated,
+            synchronizer=self.synchronizer
+        )
         self.check_modification = True
 
-    def append_data(self,
-                    new_data: Union[xarray.DataArray, xarray.Dataset],
-                    **kwargs):
+    def append(self,
+               new_data: Union[xarray.DataArray, xarray.Dataset],
+               **kwargs):
 
-        if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_backup=False, **kwargs)
+        exist = self.exist(raise_error_missing_backup=False, **kwargs)
+        if not exist:
+            return self.store(new_data=new_data, **kwargs)
 
-        if not os.path.exists(self.local_path):
-            return self.store_data(new_data=new_data, **kwargs)
-
-        new_data = self.transform_to_dataset(new_data)
-        act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
+        new_data = self._transform_to_dataset(new_data)
+        act_coords = {k: coord.values for k, coord in self.read().coords.items()}
 
         for dim, new_coord in new_data.coords.items():
             new_coord = new_coord.values
@@ -79,58 +99,63 @@ class ZarrStore(BaseStore):
                 self.local_path,
                 append_dim=dim,
                 compute=True,
-                **kwargs
+                group=self.group,
+                synchronizer=self.synchronizer
             )
 
             self.check_modification = True
 
-    def update_data(self,
-                    new_data: Union[xarray.DataArray, xarray.Dataset],
-                    **kwargs):
+    def update(self,
+               new_data: Union[xarray.DataArray, xarray.Dataset],
+               **kwargs):
         """
         TODO: Avoid loading the entire new data in memory
               Using the to_zarr method of xarray and updating in blocks with the region parameter is
               probably a good solution, the only problem is the time that could take to update,
               but I suppose that the block updating is ideal only when the new_data represent a big % of the entire data
         """
-        if not os.path.exists(self.local_path):
-            self.update_from_backup(raise_error_missing_backup=True, **kwargs)
+        self.exist(raise_error_missing_backup=True, **kwargs)
 
         if isinstance(new_data, xarray.Dataset):
             new_data = new_data.to_array()
-        act_coords = {k: coord.values for k, coord in self.get_dataset().coords.items()}
+        act_coords = {k: coord.values for k, coord in self.read().coords.items()}
 
         coords_names = list(act_coords.keys())
         bitmask = np.isin(act_coords[coords_names[0]], new_data.coords[coords_names[0]].values)
         for coord_name in coords_names[1:]:
             bitmask = bitmask & np.isin(act_coords[coord_name], new_data.coords[coord_name].values)[:, None]
 
-        arr = zarr.open(os.path.join(self.local_path, self.name), mode='a')
+        arr = zarr.open(
+            os.path.join(self.local_path, self.name),
+            mode='a',
+            synchronizer=self.synchronizer
+        )
         arr.set_mask_selection(bitmask, new_data.values.ravel())
         self.check_modification = True
 
-    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
-        self.update_data(new_data, **kwargs)
-        self.append_data(new_data, **kwargs)
+    def upsert(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+        self.update(new_data, **kwargs)
+        self.append(new_data, **kwargs)
 
-    def get_dataset(self, **kwargs) -> xarray.Dataset:
-        if not self.exist_dataset(**kwargs):
-            raise FileNotFoundError(
-                f"The file with local path: {self.local_path} "
-                f"does not exist and there is not backup"
-            )
+    def read_as_dataset(self,
+                        consolidated: bool = False,
+                        chunks: Dict = None,
+                        **kwargs) -> xarray.Dataset:
+        self.exist(raise_error_missing_backup=True, **kwargs)
         return xarray.open_zarr(
             self.local_path,
             group=self.group,
-            **kwargs
+            consolidated=consolidated,
+            chunks=chunks,
+            synchronizer=self.synchronizer
         )
 
-    def get_data_array(self, **kwargs) -> xarray.DataArray:
-        dataset = self.get_dataset(**kwargs)
+    def read(self, **kwargs) -> xarray.DataArray:
+        dataset = self.read_as_dataset(**kwargs)
         return dataset[self.name]
 
     def get_chunks_modified_dates(self):
-        if not self.exist_dataset():
+        if not self.exist():
             return {}
 
         arr_store = zarr.open(self.local_path, mode='r')
@@ -142,7 +167,7 @@ class ZarrStore(BaseStore):
         }
         return chunks_dates
 
-    def transform_to_dataset(self, new_data) -> xarray.Dataset:
+    def _transform_to_dataset(self, new_data) -> xarray.Dataset:
 
         new_data = new_data
         if isinstance(new_data, xarray.DataArray):
@@ -151,7 +176,6 @@ class ZarrStore(BaseStore):
         return new_data
 
     def backup(self, overwrite_backup: bool = False, **kwargs) -> bool:
-
         """
             TODO:
                 1) Simplify the code, probably the best option is create a class to handle the extra metadata
@@ -237,7 +261,6 @@ class ZarrStore(BaseStore):
 
     def update_from_backup(self,
                            force_update_from_backup: bool = False,
-                           raise_error_missing_backup: bool = True,
                            **kwargs) -> bool:
         if self.s3_handler is None:
             return False
@@ -245,13 +268,10 @@ class ZarrStore(BaseStore):
         force_update_from_backup = force_update_from_backup | (not os.path.exists(self.local_path))
 
         is_equal = self.equal_to_backup()
-        if not force_update_from_backup:
-            if is_equal == 'equal':
-                return False
-            if is_equal == 'not backup':
-                if raise_error_missing_backup:
-                    raise KeyError(f"The path: {self.path} not exist in s3 in the bucket: {self.bucket_name}")
-                return False
+        if is_equal == 'not backup':
+            return False
+        if not force_update_from_backup and is_equal == 'equal':
+            return False
 
         last_backup_dates = {}
         if not force_update_from_backup and os.path.exists(os.path.join(self.local_path, '.zattrs')):
@@ -287,13 +307,19 @@ class ZarrStore(BaseStore):
 
         return True
 
-    def exist_dataset(self, **kwargs):
+    def exist(self, raise_error_missing_backup: bool = False, **kwargs):
         if os.path.exists(self.local_path):
             return True
-        return self.update_from_backup(force_update_from_backup=True, raise_error_missing_backup=False, **kwargs)
+        exist = self.update_from_backup(
+            force_update_from_backup=True,
+            **kwargs
+        )
+        if raise_error_missing_backup and not exist:
+            raise FileNotFoundError(
+                f"The file with local path: {self.local_path} "
+                f"does not exist and there is not backup in the bucket {self.bucket_name}"
+            )
+        return exist
 
     def close(self, **kwargs):
         self.backup(**kwargs)
-
-
-

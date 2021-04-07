@@ -15,6 +15,9 @@ default_min_date = '1990-01-01'
 
 class FileDB(FilesStore):
     """
+        TODO:
+            Add methods to validate the data, for example should be useful to check the proportion of missing data
+            before save the data
     """
 
     def __init__(self,
@@ -26,8 +29,11 @@ class FileDB(FilesStore):
         )
         self.provider_database = ProviderDatabase()
 
-    def get_file_setting(self, path) -> Dict:
-        return self.provider_database.get_file_settings(os.path.basename(os.path.normpath(path)))
+    # def get_file_setting(self, path) -> Dict:
+    #     return self.provider_database.get_file_settings(os.path.basename(os.path.normpath(path)))
+    #
+    # def add_file_setting(self, file_settings_id, file_settings, user_id: str = ''):
+    #     pass
 
     def get_time_series_provider_data(self,
                                       get_data_provider_method: str,
@@ -36,8 +42,8 @@ class FileDB(FilesStore):
         return transform_normalized_data(provider_data)
 
     def get_prices_split_return(self, **kwargs):
-        prices_unadjusted = self.get_data_array(path='Prices Unadjusted', **kwargs)
-        split_adjustment_factor = self.get_data_array(path='Split Adjustment Factor', **kwargs)
+        prices_unadjusted = self.read(path='Prices Unadjusted', **kwargs)
+        split_adjustment_factor = self.read(path='Split Adjustment Factor', **kwargs)
         return prices_unadjusted / split_adjustment_factor.sel(
             dates=prices_unadjusted.coords['dates'][::-1]
         ).cumprod().sel(
@@ -51,7 +57,7 @@ class FileDB(FilesStore):
                       **kwargs):
         if data is None:
             return None
-        data_array = self.get_data_array(path=data_array_reindex_path, **kwargs)
+        data_array = self.read(path=data_array_reindex_path, **kwargs)
         return data.reindex({coord: data_array.coords[coord] for coord in coords_to_reindex})
 
     def replace_values_array(self,
@@ -61,28 +67,28 @@ class FileDB(FilesStore):
                              **kwargs):
         if data is None:
             return None
-        data_array = self.get_data_array(path=data_array_replace_values_path, **kwargs)
+        data_array = self.read(path=data_array_replace_values_path, **kwargs)
         return data.where(data_array.sel(data.coords), value_for_replace)
 
     def fill_nan_values_array(self,
                               data: Union[xarray.Dataset, xarray.DataArray],
-                              value_for_fill_nan: Any,
+                              value_to_replace_nan: Any,
                               **kwargs):
         if data is None:
             return None
 
-        return data.fillna(value_for_fill_nan)
+        return data.fillna(value_to_replace_nan)
 
     def forward_fill_array(self,
                            path: str,
                            data: Union[xarray.Dataset, xarray.DataArray],
-                           dim_forward_fill: str = "dates",
+                           dim_forward_fill: str,
                            **kwargs):
         if data is None:
             return None
         data_concat = data
-        if self.exist_dataset(path):
-            data_array = self.get_data_array(path, **kwargs)
+        if self.exist(path):
+            data_array = self.read(path, **kwargs)
             data_array = data_array.sel({
                 dim_forward_fill: data_array.coords[dim_forward_fill] < data.coords[dim_forward_fill][0]
             })
@@ -100,7 +106,7 @@ class FileDB(FilesStore):
         if data is None:
             return None
 
-        data_array_valid = self.get_data_array(data_array_replace_values_path, **kwargs)
+        data_array_valid = self.read(data_array_replace_values_path, **kwargs)
         data_array_valid = data_array_valid.fillna(data.coords[dim_last_valid][-1])
         data_array_valid = xarray.DataArray(
             data=data.coords[dim_last_valid].values[:, None] <= data_array_valid.values,
@@ -136,10 +142,10 @@ class FileDB(FilesStore):
         if data is None:
             return
 
-        self.get_handler(
+        self._get_handler(
             path=path,
             **kwargs
-        ).store_data(
+        ).store(
             new_data=data,
             **kwargs
         )
@@ -149,7 +155,7 @@ class FileDB(FilesStore):
                                          data_methods_to_apply: List[str],
                                          **kwargs):
 
-        start_date = self.get_data_array(path, **kwargs).coords['dates'][0].values
+        start_date = self.read(path, **kwargs).coords['dates'][0].values
         data = self.apply_data_methods(
             data_methods_to_apply=data_methods_to_apply,
             start_date=start_date,
@@ -158,10 +164,10 @@ class FileDB(FilesStore):
         if data is None:
             return
 
-        self.get_handler(
+        self._get_handler(
             path=path,
             **kwargs
-        ).append_data(
+        ).append(
             new_data=data,
             **kwargs
         )
@@ -182,10 +188,10 @@ class FileDB(FilesStore):
         if data is None:
             return
 
-        self.get_handler(
+        self._get_handler(
             path=path,
             **kwargs
-        ).update_data(
+        ).update(
             new_data=data,
             **kwargs
         )
@@ -195,10 +201,10 @@ class FileDB(FilesStore):
                                    **kwargs):
 
         prices_split_return = self.get_prices_split_return(**kwargs)
-        split_adjustment_factor = self.get_data_array(path='Split Adjustment Factor', **kwargs)
+        split_adjustment_factor = self.read(path='Split Adjustment Factor', **kwargs)
         start_date = prices_split_return.coords['dates'][0].values
 
-        handler = self.get_handler(
+        handler = self._get_handler(
             path=path,
             **kwargs
         )
@@ -208,7 +214,7 @@ class FileDB(FilesStore):
             (securities_to_update != 1).any(axis=0).values
         ]
         if len(securities_to_update) > 0:
-            handler.update_data(
+            handler.update(
                 new_data=prices_split_return.sel(
                     dates=prices_split_return.coords['dates'] <= start_date,
                     security_id=securities_to_update
@@ -216,7 +222,7 @@ class FileDB(FilesStore):
                 **kwargs
             )
 
-        handler.append_data(
+        handler.append(
             new_data=prices_split_return.sel(
                 dates=prices_split_return.coords['dates'] > start_date,
             ),

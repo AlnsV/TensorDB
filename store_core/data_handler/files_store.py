@@ -57,14 +57,15 @@ class FilesStore:
 
         self.__dict__.update(**kwargs)
 
-    def get_file_setting(self, path) -> Dict:
-        return self._files_settings[os.path.basename(os.path.normpath(path))]
+    def get_file_settings(self, path) -> Dict:
+        file_settings_id = os.path.basename(os.path.normpath(path))
+        return self._files_settings[file_settings_id]
 
-    def get_handler(self,
-                    path: Union[str, List],
-                    **kwargs) -> BaseStore:
+    def _get_handler(self,
+                     path: Union[str, List],
+                     **kwargs) -> BaseStore:
 
-        file_setting = self.get_file_setting(path)
+        file_setting = self.get_file_settings(path).get('handler', {}).copy()
         local_path = self.complete_path(file_setting=file_setting, path=path)
         if local_path not in self.open_base_store:
             self.open_base_store[local_path] = {
@@ -72,8 +73,7 @@ class FilesStore:
                     base_path=self.base_path,
                     path=self.complete_path(file_setting=file_setting, path=path, omit_base_path=True),
                     s3_handler=self.s3_handler,
-                    **file_setting,
-                    **kwargs
+                    **file_setting
                 ),
                 'first_read_date': pd.Timestamp.now(),
                 'num_use': 0
@@ -81,149 +81,127 @@ class FilesStore:
         self.open_base_store[local_path]['num_use'] += 1
         return self.open_base_store[local_path]['data_handler']
 
-    def get_data_array_from_formula(self, path, **kwargs):
-        file_setting = self.get_file_setting(path)
-        formula = file_setting['formula']
-        data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
+    def read_from_formula(self, formula, **kwargs):
         data_fields = {}
+        data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
         for i in range(0, len(data_fields_intervals), 2):
             name_data_field = formula[data_fields_intervals[i] + 1: data_fields_intervals[i + 1]]
-            data_fields[name_data_field] = self.get_data_array(
-                name_data_field,
-                **kwargs
+            data_fields[name_data_field] = self.read(
+                name_data_field
             )
-
         for name, dataset in data_fields.items():
             formula = formula.replace(f"`{name}`", f"data_fields['{name}']")
+        return eval(formula)
 
-        dataset_formula = eval(formula)
-        return dataset_formula
+    def read(self,
+             path: Union[str, List],
+             **kwargs) -> xarray.DataArray:
 
-    def get_data_array(self,
-                       path: Union[str, List],
-                       **kwargs) -> xarray.DataArray:
+        file_settings = self.get_file_settings(path).get('read', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        file_setting = self.get_file_setting(path)
-        if 'get_data_array' in file_setting:
-            return getattr(self, file_setting['get_data_array'])(**kwargs)
-
-        if file_setting.get('on_fly', False):
-            return self.get_data_array_from_formula(path, **kwargs)
-
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
-        ).get_data_array()
-
-    def append_data(self,
-                    path: Union[str, List],
-                    **kwargs):
-
-        file_setting = self.get_file_setting(path)
-        if 'append_data' in file_setting:
-            return getattr(self, file_setting['append_data'])(
-                file_setting=file_setting,
-                path=path,
-                **kwargs
-            )
-
-        return self.get_handler(
-            path=path,
-            **kwargs
-        ).append_data(
-            **kwargs
+        ).read(
+            **file_settings
         )
 
-    def update_data(self,
-                    path: Union[str, List],
-                    **kwargs):
+    def append(self,
+               path: Union[str, List],
+               **kwargs):
+        file_settings = self.get_file_settings(path).get('append', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        file_setting = self.get_file_setting(path)
-        if 'update_data' in file_setting:
-            return getattr(self, file_setting['update_data'])(
-                path=path,
-                **kwargs
-            )
-
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
-        ).update_data(
-            **kwargs
+        ).append(
+            **file_settings
         )
 
-    def store_data(self,
-                   path: Union[str, List],
-                   **kwargs):
+    def update(self,
+               path: Union[str, List],
+               **kwargs):
 
-        file_setting = self.get_file_setting(path)
-        if 'store_data' in file_setting:
-            return getattr(self, file_setting['store_data'])(
-                path=path,
-                **kwargs
-            )
+        file_settings = self.get_file_settings(path).get('update', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
-        ).store_data(
+        ).update(
+            **file_settings
+        )
+
+    def store(self,
+              path: Union[str, List],
+              **kwargs):
+
+        file_settings = self.get_file_settings(path).get('store', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
+
+        return self._get_handler(
+            path=path,
             **kwargs
+        ).store(
+            **file_settings
         )
 
     def backup(self,
                path: Union[str, List],
                **kwargs):
 
-        file_setting = self.get_file_setting(path)
-        if 'backup' in file_setting:
-            return getattr(self, file_setting['backup'])(
-                file_setting=file_setting,
-                path=path,
-                **kwargs
-            )
+        file_settings = self.get_file_settings(path).get('backup', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
         ).backup(
-            **kwargs
+            **file_settings
         )
 
     def update_from_backup(self,
                            path: Union[str, List],
                            **kwargs):
 
-        file_setting = self.get_file_setting(path)
-        if 'update_from_backup' in file_setting:
-            return getattr(self, file_setting['update_from_backup'])(
-                file_setting=file_setting,
-                path=path,
-                **kwargs
-            )
+        file_settings = self.get_file_settings(path).get('update_from_backup', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
         ).update_from_backup(
-            **kwargs
+            **file_settings
         )
 
     def close(self,
               path: Union[str, List],
               **kwargs):
 
-        file_setting = self.get_file_setting(path)
-        if 'close' in file_setting:
-            return getattr(self, file_setting['close'])(
-                path=path,
-                **kwargs
-            )
+        file_settings = self.get_file_settings(path).get('close', {}).copy()
+        file_settings.update(kwargs)
+        if 'method' in file_settings:
+            return getattr(self, file_settings['method'])(**file_settings)
 
-        return self.get_handler(
+        return self._get_handler(
             path=path,
             **kwargs
         ).close(
-            **kwargs
+            **file_settings
         )
 
     def complete_path(self,
@@ -237,16 +215,15 @@ class FilesStore:
 
         return os.path.join(file_setting.get('extra_path', ''), *path)
 
-    def exist_dataset(self,
-                      path: str,
-                      **kwargs):
-        return self.get_handler(
+    def exist(self,
+              path: str,
+              **kwargs):
+        return self._get_handler(
             path,
             **kwargs
-        ).exist_dataset(
+        ).exist(
             **kwargs
         )
 
-    def add_file_setting(self, name, file_setting):
-        self._files_settings[name] = file_setting
-
+    def add_file_setting(self, file_settings_id, file_settings):
+        self._files_settings[file_settings_id] = file_settings

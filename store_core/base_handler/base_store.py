@@ -15,19 +15,23 @@ class BaseStore:
         self.__dict__.update(kwargs)
 
     @abstractmethod
-    def append_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+    def append(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def update_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+    def update(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def store_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+    def store(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+    def upsert(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
+        pass
+
+    @abstractmethod
+    def read(self, **kwargs) -> xarray.DataArray:
         pass
 
     @abstractmethod
@@ -39,19 +43,11 @@ class BaseStore:
         pass
 
     @abstractmethod
-    def get_dataset(self, **kwargs) -> xarray.Dataset:
-        pass
-
-    @abstractmethod
-    def get_data_array(self, **kwargs) -> xarray.DataArray:
-        pass
-
-    @abstractmethod
     def close(self, **kwargs):
         pass
 
     @abstractmethod
-    def exist_dataset(self, **kwargs):
+    def exist(self, **kwargs):
         pass
 
     @property
