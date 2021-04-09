@@ -8,7 +8,7 @@ import json
 
 from typing import Dict, List, Any, Union, Set
 from loguru import logger
-from config_path.config_root_dir import ROOT_DIR
+from config.config_root_dir import ROOT_DIR
 
 
 class ProviderDatabase:
@@ -16,7 +16,7 @@ class ProviderDatabase:
     max_tries = 1
 
     def __init__(self, **kwargs):
-        file = ROOT_DIR + '/config/config_db.yml'
+        file = ROOT_DIR + '/config_db.yml'
         with open(file, "r") as yml_config:
             self.config = yaml.safe_load(yml_config)[os.getenv("ENV_MODE", 'test')]
         # Connection parameters of the database

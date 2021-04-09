@@ -3,8 +3,7 @@ import numpy as np
 
 from loguru import logger
 from bitacore.file_db.file_db import FileDB
-from store_core.utils import create_dummy_array, compare_dataset
-from config_path.config_root_dir import TEST_DIR_FILE_DB
+from config.config_root_dir import TEST_DIR_FILE_DB
 
 
 def get_default_file_db():

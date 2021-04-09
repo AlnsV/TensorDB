@@ -6,7 +6,7 @@ from loguru import logger
 from store_core.data_handler.files_store import FilesStore
 from store_core.zarr_handler.zarr_store import ZarrStore
 from store_core.utils import create_dummy_array, compare_dataset
-from config_path.config_root_dir import TEST_DIR_FILES_STORE
+from config.config_root_dir import TEST_DIR_FILES_STORE
 
 
 def get_default_files_store():

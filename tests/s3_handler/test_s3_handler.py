@@ -2,7 +2,7 @@ import os
 import json
 
 from store_core.s3_handler.s3_handler import S3Handler
-from config_path.config_root_dir import TEST_DIR_S3
+from config.config_root_dir import TEST_DIR_S3
 
 
 def get_default_s3_handler():

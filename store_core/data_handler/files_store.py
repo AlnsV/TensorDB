@@ -44,9 +44,7 @@ class FilesStore:
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
                  max_files_on_disk: int = 30,
                  **kwargs):
-        """
 
-        """
         self.env_mode = os.getenv("ENV_MODE") if use_env else ""
         self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
         self.base_path = os.path.join(self.base_path, self.env_mode)

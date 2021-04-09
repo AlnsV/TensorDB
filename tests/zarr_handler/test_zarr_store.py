@@ -9,7 +9,7 @@ from loguru import logger
 
 from store_core.utils import create_dummy_array, compare_dataset
 from store_core.zarr_handler.zarr_store import ZarrStore
-from config_path.config_root_dir import TEST_DIR_ZARR
+from config.config_root_dir import TEST_DIR_ZARR
 
 
 def get_default_zarr_store():
