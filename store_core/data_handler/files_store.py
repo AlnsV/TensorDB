@@ -9,7 +9,7 @@ from pandas import Timestamp
 from store_core.base_handler.base_store import BaseStore
 from store_core.s3_handler.s3_handler import S3Handler
 from store_core.zarr_handler.zarr_store import ZarrStore
-from config_path.config_root_dir import ROOT_DIR
+from config.config_root_dir import ROOT_DIR
 
 
 class FilesStore:
