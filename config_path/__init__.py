@@ -1,0 +1,9 @@
+import config_path.config_root_dir
+
+from config_path.config_root_dir import ROOT_DIR
+from config_path.config_root_dir import TEST_DIR
+from config_path.config_root_dir import TEST_DIR_FILES_STORE
+from config_path.config_root_dir import TEST_DIR_FILE_DB
+from config_path.config_root_dir import TEST_DIR_S3
+from config_path.config_root_dir import TEST_DIR_ZARR
+
