@@ -9,42 +9,45 @@ class BaseStore:
     def __init__(self,
                  path: str,
                  base_path: str = None,
-                 *args,
                  **kwargs):
         self.path = path
         self.base_path = base_path
         self.__dict__.update(kwargs)
 
     @abstractmethod
-    def append_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def append(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def update_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def update(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def store_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def store(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def upsert_data(self, new_data: Union[xarray.DataArray, xarray.Dataset], *args, **kwargs):
+    def upsert(self, new_data: Union[xarray.DataArray, xarray.Dataset], **kwargs):
         pass
 
     @abstractmethod
-    def update_from_backup(self, *args, **kwargs):
+    def read(self, **kwargs) -> xarray.DataArray:
         pass
 
     @abstractmethod
-    def backup(self, *args, **kwargs):
+    def update_from_backup(self, **kwargs):
         pass
 
     @abstractmethod
-    def get_dataset(self, *args, **kwargs) -> xarray.Dataset:
+    def backup(self, **kwargs):
         pass
 
     @abstractmethod
-    def close(self, *args, **kwargs):
+    def close(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def exist(self, **kwargs):
         pass
 
     @property

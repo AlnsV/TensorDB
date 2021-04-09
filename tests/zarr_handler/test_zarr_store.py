@@ -53,8 +53,8 @@ class TestZarrStore:
 
     def test_store_data(self):
         a = get_default_zarr_store()
-        a.store_data(TestZarrStore.arr)
-        dataset = a.get_dataset()
+        a.store(TestZarrStore.arr)
+        dataset = a.read()
         assert compare_dataset(dataset, TestZarrStore.arr)
 
     def test_append_data(self):
@@ -65,21 +65,21 @@ class TestZarrStore:
 
         arr = TestZarrStore.arr.to_dataset(name='data_test')
         for i in range(5):
-            a.append_data(arr.isel(index=[i]))
+            a.append(arr.isel(index=[i]))
 
         arr2 = TestZarrStore.arr2.to_dataset(name='data_test')
         for i in range(3):
-            a.append_data(arr2.isel(index=[i]))
+            a.append(arr2.isel(index=[i]))
 
         total_data = xarray.concat([arr, arr2], dim='index')
-        dataset = a.get_dataset()
+        dataset = a.read()
         assert compare_dataset(dataset, total_data)
 
     def test_update_data(self):
         self.test_store_data()
         a = get_default_zarr_store()
-        a.update_data(TestZarrStore.arr + 5)
-        dataset = a.get_dataset()
+        a.update(TestZarrStore.arr + 5)
+        dataset = a.read()
         assert compare_dataset(dataset, TestZarrStore.arr + 5)
 
     def test_backup(self):
@@ -87,17 +87,17 @@ class TestZarrStore:
         TODO: Improve this test
         """
         a = get_default_zarr_store()
-        a.store_data(TestZarrStore.arr)
+        a.store(TestZarrStore.arr)
         a.backup()
         shutil.rmtree(a.local_path)
         a.update_from_backup()
-        dataset = a.get_dataset()
+        dataset = a.read()
         assert compare_dataset(dataset, TestZarrStore.arr)
 
 
 if __name__ == "__main__":
     test = TestZarrStore()
-    # test.test_store_data()
+    test.test_store_data()
     # test.test_append_data()
     # test.test_update_data()
-    test.test_backup()
+    # test.test_backup()
