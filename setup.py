@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='File DB',
+    name='FileDB',
     version='2.0',
     description='File system storage based in Xarray and Zarr',
     author='Joseph Nowak',
