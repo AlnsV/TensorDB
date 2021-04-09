@@ -33,6 +33,8 @@ setup(
         'boto3',
         'pyyaml',
         'zarr',
-        'fasteners'
+        'fasteners',
+        'botocore',
+        'pytest'
     ]
 )

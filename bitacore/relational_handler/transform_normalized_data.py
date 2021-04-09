@@ -8,7 +8,7 @@ def transform_normalized_data(df: pd.DataFrame) -> xarray.DataArray:
     if 'from_date' in df.columns and 'security_id' in df.columns:
         return _transform_2d_normalized_from_to_to_dataset(df)
 
-    if 'dates' in df.columns and 'security_id' in df.columns:
+    if 'date' in df.columns and 'security_id' in df.columns:
         return _transform_2d_normalized_to_dataset(df)
 
     if 'security_id' in df.columns and len(df.columns) == 2:
@@ -61,36 +61,36 @@ def transform_normalized_data(df: pd.DataFrame) -> xarray.DataArray:
 
 
 def _transform_2d_normalized_to_dataset(df: pd.DataFrame):
-    df = df.pivot(index='dates', columns='security_id', values='value')
+    df = df.pivot(index='date', columns='security_id', values='value')
     return xarray.DataArray(
         df.to_numpy(),
         coords={
-            'dates': list(df.index),
+            'date': list(df.index),
             'security_id': list(df.columns)
         },
-        dims=['dates', 'security_id']
+        dims=['date', 'security_id']
     )
 
 
 def _transform_2d_normalized_from_to_to_dataset(df: pd.DataFrame):
-    last_valid_dates = df[['security_id', 'to_date']].groupby('security_id').max().iloc[:, 0]
+    last_valid_date = df[['security_id', 'to_date']].groupby('security_id').max().iloc[:, 0]
 
     df = df.pivot(index='from_date', columns='security_id', values='value')
     df.ffill(inplace=True)
 
-    last_valid_dates.fillna(df.index[-1], inplace=True)
-    last_valid_dates.iloc[:] = pd.to_datetime(last_valid_dates.values)
+    last_valid_date.fillna(df.index[-1], inplace=True)
+    last_valid_date.iloc[:] = pd.to_datetime(last_valid_date.values)
 
-    valid_positions = np.tile(df.index, (len(df.columns), 1)).T <= last_valid_dates.to_numpy()[None, :]
+    valid_positions = np.tile(df.index, (len(df.columns), 1)).T <= last_valid_date.to_numpy()[None, :]
     df.where(valid_positions, np.nan, inplace=True)
 
     return xarray.DataArray(
         df.to_numpy(),
         coords={
-            'dates': list(df.index),
+            'date': list(df.index),
             'security_id': list(df.columns)
         },
-        dims=['dates', 'security_id']
+        dims=['date', 'security_id']
     )
 
 

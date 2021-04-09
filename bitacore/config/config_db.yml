@@ -1,0 +1,10 @@
+prod:
+  host: "bita-database.ceprzr8ngwcz.us-east-2.rds.amazonaws.com"
+  dbname: "bita_universe"
+  user: "bita_master"
+  password: "J#eHUYLU42bmv+FN"
+test:
+  host: "172.31.44.184"
+  dbname: "bita_universe"
+  user: "bita_master"
+  password: "b1t4d4t4**"

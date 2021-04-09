@@ -18,8 +18,6 @@ class ZarrStore(BaseStore):
     TODO:
         1) The next versions of zarr will add support for the modification dates of the chunks, that will simplify
             the code of backup, so It is a good idea modify the code after the modification being published
-        2) Add the zarr process synchronizer or fasteners module to avoid that multiple process read, backup or write
-            at the same time in the same chunk, zarr already has this option, the problem is with the backup options
     """
 
     def __init__(self,
@@ -61,7 +59,8 @@ class ZarrStore(BaseStore):
               **kwargs):
 
         new_data = self._transform_to_dataset(new_data)
-        new_data.to_zarr(
+        self.check_modification = True
+        return new_data.to_zarr(
             self.local_path,
             group=self.group,
             mode='w',
@@ -70,7 +69,6 @@ class ZarrStore(BaseStore):
             consolidated=consolidated,
             synchronizer=self.synchronizer
         )
-        self.check_modification = True
 
     def append(self,
                new_data: Union[xarray.DataArray, xarray.Dataset],
@@ -178,8 +176,8 @@ class ZarrStore(BaseStore):
     def backup(self, overwrite_backup: bool = False, **kwargs) -> bool:
         """
             TODO:
-                1) Simplify the code, probably the best option is create a class to handle the extra metadata
-                    and follow the logic used to update_from_backup
+                1) Add the synchronizer option for this method, this will prevent from uploading a file that
+                    is being wrote by another process or thread
         """
 
         if self.s3_handler is None:
@@ -236,11 +234,13 @@ class ZarrStore(BaseStore):
         return True
 
     def equal_to_backup(self, **kwargs) -> str:
-        if not os.path.exists(os.path.join(self.local_path, 'zbackup_date.json')):
-            return "not equal"
+        if self.bucket_name is None:
+            return "not backup"
 
-        with open(os.path.join(self.local_path, 'zbackup_date.json'), 'r') as json_file:
-            backup_date = json.load(json_file)['backup_date']
+        backup_date = {}
+        if os.path.exists(os.path.join(self.local_path, 'zbackup_date.json')):
+            with open(os.path.join(self.local_path, 'zbackup_date.json'), 'r') as json_file:
+                backup_date = json.load(json_file)['backup_date']
 
         try:
             self.s3_handler.download_file(
@@ -250,8 +250,11 @@ class ZarrStore(BaseStore):
                 max_concurrency=1,
                 **kwargs
             )
-        except KeyError:
+        except (S3Handler.botoclient_error, KeyError):
             return "not backup"
+
+        if not backup_date:
+            return "not equal"
 
         with open(os.path.join(self.local_path, 'zbackup_date.json'), 'r') as json_file:
             backup_date_s3 = json.load(json_file)['backup_date']
@@ -262,6 +265,11 @@ class ZarrStore(BaseStore):
     def update_from_backup(self,
                            force_update_from_backup: bool = False,
                            **kwargs) -> bool:
+        """
+            TODO:
+                1) Add the synchronizer option for this method, this will prevent from overwriting a file that
+                    is being used by another process or thread
+        """
         if self.s3_handler is None:
             return False
 
@@ -308,7 +316,7 @@ class ZarrStore(BaseStore):
         return True
 
     def exist(self, raise_error_missing_backup: bool = False, **kwargs):
-        if os.path.exists(self.local_path):
+        if os.path.exists(os.path.join(self.local_path, '.zattrs')):
             return True
         exist = self.update_from_backup(
             force_update_from_backup=True,

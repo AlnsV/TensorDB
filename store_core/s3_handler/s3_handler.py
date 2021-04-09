@@ -6,10 +6,14 @@ import time
 from typing import Dict, List, Any, Union, Callable, Set
 from loguru import logger
 from boto3.s3.transfer import TransferConfig
+from botocore.exceptions import ClientError
 from multiprocessing.pool import ThreadPool
 
 
 class S3Handler:
+
+    botoclient_error = ClientError
+
     def __init__(self,
                  aws_access_key_id: str,
                  aws_secret_access_key: str,
