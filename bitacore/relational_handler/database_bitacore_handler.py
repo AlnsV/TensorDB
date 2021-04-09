@@ -8,7 +8,7 @@ import json
 
 from typing import Dict, List, Any, Union, Set
 from loguru import logger
-from BC2.config_root_dir import ROOT_DIR
+from config_path.config_root_dir import ROOT_DIR
 
 
 class ProviderDatabase:
