@@ -20,6 +20,7 @@ setup(
         'store_core',
         'store_core.data_handler',
         'store_core.base_handler',
+        'bitacore',
         'bitacore.file_db',
         'bitacore.relational_handler',
         'tests'
