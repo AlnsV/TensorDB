@@ -2,7 +2,7 @@ import xarray
 import pandas as pd
 import os
 
-from typing import Dict, List, Any, Union, Callable
+from typing import Dict, List, Any, Union, Callable, Iterable
 from loguru import logger
 from numpy import datetime64
 
@@ -37,6 +37,35 @@ class FileDB(FilesStore):
             author_id=author_id,
             **kwargs
         )
+
+    def store_by_time_intervals(self,
+                                path: str,
+                                start_date: Union[str, pd.Timestamp],
+                                end_date: Union[str, pd.Timestamp],
+                                interval_len: int,
+                                security_id: Iterable = None,
+                                **kwargs):
+        date_ranges = pd.date_range(start_date, end_date)
+        intervals = date_ranges[::interval_len]
+        if intervals[-1] != date_ranges[-1]:
+            intervals = pd.to_datetime(list(intervals) + [date_ranges[-1]])
+
+        self.store(
+            path=path,
+            start_date=intervals[0],
+            end_date=intervals[1],
+            security_id=security_id,
+            **kwargs
+        )
+        start_date = intervals[1]
+        for end_date in intervals[2:]:
+            self.append(
+                path=path,
+                start_date=start_date,
+                end_date=end_date,
+                security_id=security_id,
+                **kwargs
+            )
 
     def append_prices_split_return(self, handler, **kwargs):
 
@@ -87,10 +116,12 @@ class FileDB(FilesStore):
     def get_prices_data(self,
                         start_date: Union[str, pd.Timestamp],
                         end_date: Union[str, pd.Timestamp] = None,
+                        security_id: Iterable = None,
                         **kwargs) -> xarray.DataArray:
         data = self.provider_database.get_prices_data(
             start_date=start_date,
             end_date=end_date,
+            security_id=security_id,
             **kwargs
         )
         return transform_normalized_data(data)
@@ -102,6 +133,7 @@ class FileDB(FilesStore):
                      value_field_name: str = "value",
                      data_level: str = "company",
                      end_date: Union[str, pd.Timestamp] = None,
+                     security_id: Iterable = None,
                      **kwargs) -> xarray.DataArray:
         data = self.provider_database.get_esg_data(
             start_date=start_date,
@@ -110,6 +142,7 @@ class FileDB(FilesStore):
             table_name=table_name,
             value_field_name=value_field_name,
             data_level=data_level,
+            security_id=security_id,
             **kwargs
         )
         return transform_normalized_data(data)
@@ -121,6 +154,7 @@ class FileDB(FilesStore):
                                  from_to_name: str = 'from_date',
                                  to_date_name: str = 'to_date',
                                  end_date: Union[str, pd.Timestamp] = None,
+                                 security_id: Iterable = None,
                                  **kwargs) -> xarray.DataArray:
         data = self.provider_database.get_generic_from_to_data(
             start_date=start_date,
@@ -129,6 +163,7 @@ class FileDB(FilesStore):
             table_name=table_name,
             from_to_name=from_to_name,
             to_date_name=to_date_name,
+            security_id=security_id,
             **kwargs
         )
         return transform_normalized_data(data)
@@ -139,6 +174,7 @@ class FileDB(FilesStore):
                                      value_name: str,
                                      time_name: str,
                                      end_date: Union[str, pd.Timestamp] = None,
+                                     security_id: Iterable = None,
                                      **kwargs) -> xarray.DataArray:
         data = self.provider_database.get_generic_time_series_data(
             start_date=start_date,
@@ -146,6 +182,7 @@ class FileDB(FilesStore):
             value_name=value_name,
             table_name=table_name,
             time_name=time_name,
+            security_id=security_id,
             **kwargs
         )
         return transform_normalized_data(data)

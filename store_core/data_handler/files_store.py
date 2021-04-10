@@ -179,15 +179,20 @@ class FilesStore:
                 new_data: xarray.DataArray,
                 reindex_path: str,
                 coords_to_reindex: List[str],
-                method_ffill: str = None,
+                action_type: str,
+                method_fill_value: str = None,
                 **kwargs) -> Union[xarray.DataArray, None]:
         if new_data is None:
             return None
         data_reindex = self.read(path=reindex_path, **kwargs)
-        return new_data.reindex(
-            {coord: data_reindex.coords[coord] for coord in coords_to_reindex},
-            method=method_ffill
-        )
+        if action_type == 'store' or any([size == 0 for size in new_data.sizes.values()]):
+            coords_to_reindex = {coord: data_reindex.coords[coord] for coord in coords_to_reindex}
+        else:
+            coords_to_reindex = {
+                coord: data_reindex.coords[coord][data_reindex.coords[coord] >= new_data.coords[coord]]
+                for coord in coords_to_reindex
+            }
+        return new_data.reindex(coords_to_reindex, method=method_fill_value)
 
     def last_valid_dim(self,
                        new_data: xarray.DataArray,
@@ -195,6 +200,8 @@ class FilesStore:
                        **kwargs) -> Union[xarray.DataArray, None]:
         if new_data is None:
             return None
+        if new_data.dtype == 'bool':
+            return new_data.cumsum(dim=dim).idxmax(dim=dim)
         return new_data.notnull().cumsum(dim=dim).idxmax(dim=dim)
 
     def replace_values(self,
@@ -245,13 +252,5 @@ class FilesStore:
             return new_data
 
         last_valid = self.read(path=replace_path, **kwargs)
-        last_valid = last_valid.fillna(new_data.coords[dim][-1])
-        last_valid = xarray.DataArray(
-            data=new_data.coords[dim].values[:, None] <= last_valid.values,
-            coords={
-                dim: new_data.coords[dim],
-                **{dim_last: coord for dim_last, coord in last_valid.coords.items() if dim != dim_last}
-            },
-            dims=new_data.dims
-        )
+        last_valid = new_data.coords[dim] <= last_valid.fillna(new_data.coords[dim][-1])
         return new_data.where(last_valid.sel(new_data.coords), value)

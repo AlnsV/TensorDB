@@ -6,7 +6,7 @@ import time
 import pandas as pd
 import json
 
-from typing import Dict, List, Any, Union, Set
+from typing import Dict, List, Any, Union, Set, Iterable
 from loguru import logger
 from config.config_root_dir import ROOT_DIR
 
@@ -57,6 +57,7 @@ class ProviderDatabase:
     def execute_query(self, query: str):
         num_try = 0
         error = False
+        error_msg = None
         while num_try < ProviderDatabase.max_tries:
             num_try += 1
             try:
@@ -65,15 +66,16 @@ class ProviderDatabase:
                 ProviderDatabase._db_connection.commit()
                 cursor.close()
                 error = False
-            except:
-                logger.error('error')
+            except Exception as e:
+                logger.error(e)
                 self.connect_db()
                 error = True
+                error_msg = e
                 continue
             break
 
         if error:
-            raise psycopg2.DatabaseError('Error executing the query')
+            raise psycopg2.DatabaseError(f'Error executing the query {error_msg}')
 
     def upsert_file_settings(self, data_field_name: str, file_settings: Dict, author_id: str = '', **kwargs):
         file_settings_id = data_field_name
@@ -81,6 +83,7 @@ class ProviderDatabase:
             file_settings_id += author_id
         create_date = str(pd.Timestamp.now())
         file_settings = json.dumps(file_settings)
+
         query = f"""
             INSERT INTO test_files_settings (
                 name, 
@@ -117,26 +120,41 @@ class ProviderDatabase:
         data = self.get_data_query(query, 'get_file_settings')
         return data.iloc[0, 0]
 
+    @staticmethod
+    def _format_query_date(date: Union[str, pd.Timestamp],  time_name: str, operator: str, prefix: str = 'AND '):
+        if date is None:
+            return ''
+        return prefix + f"{time_name} {operator} '{pd.Timestamp(date).strftime('%Y-%m-%d')}'"
+
+    @staticmethod
+    def _format_query_security_id(security_id: Iterable, field_id: Iterable, prefix: str = 'AND '):
+        if security_id is None:
+            return ''
+        return prefix + f"{field_id} IN ({', '.join(str(security) for security in security_id)})"
+
     def get_generic_time_series_data(self,
                                      start_date: Union[str, pd.Timestamp],
                                      table_name: str,
                                      value_name: str,
                                      time_name: str,
                                      end_date: Union[str, pd.Timestamp] = None,
+                                     security_id: Iterable = None,
                                      **kwargs) -> pd.DataFrame:
-        start_date = pd.Timestamp(start_date).strftime('%Y-%m-%d')
-        end_date_filter = ''
-        if end_date is not None:
-            end_date = pd.Timestamp(end_date).strftime('%Y-%m-%d')
-            end_date_filter = f"AND {time_name} <= '{end_date}'"
+
+        start_date_filter = ProviderDatabase._format_query_date(start_date, f'a.{time_name}', '>', '')
+        end_date_filter = ProviderDatabase._format_query_date(end_date, f'a.{time_name}', '<=', 'AND ')
+        security_filter = ProviderDatabase._format_query_security_id(security_id, 'a.security_id', 'AND ')
+
         query = f"""
             SELECT 
                 a.{time_name} AS date,
                 a.{value_name} AS value,
                 a.security_id AS security_id
             FROM {table_name} AS a
-            WHERE {time_name} > '{start_date}'
+            WHERE 
+                {start_date_filter}
                 {end_date_filter}
+                {security_filter}
         """
         data = self.get_data_query(query, 'generic_time_series')
         return data
@@ -148,12 +166,12 @@ class ProviderDatabase:
                                  from_to_name: str = 'from_date',
                                  to_date_name: str = 'to_date',
                                  end_date: Union[str, pd.Timestamp] = None,
+                                 security_id: Iterable = None,
                                  **kwargs) -> pd.DataFrame:
-        start_date = pd.Timestamp(start_date).strftime('%Y-%m-%d')
-        end_date_filter = ''
-        if end_date is not None:
-            end_date = pd.Timestamp(end_date).strftime('%Y-%m-%d')
-            end_date_filter = f"AND {to_date_name} <= '{end_date}'"
+        start_date_filter = ProviderDatabase._format_query_date(start_date, f'a.{from_to_name}', '>', '')
+        end_date_filter = ProviderDatabase._format_query_date(end_date, f'a.{to_date_name}', '<=', 'AND ')
+        security_filter = ProviderDatabase._format_query_security_id(security_id, 'a.security_id', 'AND ')
+
         query = f"""
             SELECT 
                 a.{from_to_name} AS from_date,
@@ -161,8 +179,10 @@ class ProviderDatabase:
                 a.{value_name} AS value,
                 a.security_id AS security_id
             FROM {table_name} AS a
-            WHERE {from_to_name} > '{start_date}'
+            WHERE 
+                {start_date_filter}
                 {end_date_filter}
+                {security_filter}
         """
         data = self.get_data_query(query, 'generic_time_series')
         return data
@@ -174,19 +194,16 @@ class ProviderDatabase:
                      value_field_name: str = "value",
                      data_level: str = "company",
                      end_date: Union[str, pd.Timestamp] = None,
+                     security_id: Iterable = None,
                      **kwargs) -> pd.DataFrame:
         """
             Gets the ESG ratings data of all the components of
             a list of securities for a list of dates.
         """
 
-        # Converting lists with data into strings for the query
-        start_date = pd.Timestamp(start_date).strftime('%Y-%m-%d')
-
-        end_date_filter = ''
-        if end_date is not None:
-            end_date = pd.Timestamp(end_date).strftime('%Y-%m-%d')
-            end_date_filter = f"AND to_date <= '{end_date}'"
+        start_date_filter = ProviderDatabase._format_query_date(start_date, 'esg.from_date', '>', '')
+        end_date_filter = ProviderDatabase._format_query_date(end_date, 'esg.to_date', '<=', 'AND ')
+        security_filter = ProviderDatabase._format_query_security_id(security_id, 'iq.security_id', 'AND ')
 
         data_level_query = "esg.m_company_id = m_security.company_id"
         if data_level == 'instrument':
@@ -201,23 +218,24 @@ class ProviderDatabase:
             FROM {table_name} AS esg
             JOIN m_security
                 ON {data_level_query}
-            WHERE esg.m_data_field_id = {data_field}
-                AND from_date > '{start_date}'
+            WHERE 
+                esg.m_data_field_id = {data_field}
+                {start_date_filter}
                 {end_date_filter}
+                {security_filter}
         """
-
         data = self.get_data_query(query, 'get_esg_data')
         return data
 
     def get_prices_data(self,
                         start_date: Union[str, pd.Timestamp],
                         end_date: Union[str, pd.Timestamp] = None,
+                        security_id: Iterable = None,
                         **kwargs) -> pd.DataFrame:
-        start_date = pd.Timestamp(start_date).strftime('%Y-%m-%d')
-        end_date_filter = ''
-        if end_date is not None:
-            end_date = pd.Timestamp(end_date).strftime('%Y-%m-%d')
-            end_date_filter = f"AND price_date <= '{end_date}'"
+        start_date_filter = ProviderDatabase._format_query_date(start_date, 'sp.price_date', '>', '')
+        end_date_filter = ProviderDatabase._format_query_date(end_date, 'sp.price_date', '<=', 'AND ')
+        security_filter = ProviderDatabase._format_query_security_id(security_id, 'iq.security_id', 'AND ')
+
         query = f"""
             SELECT 
                 sp.price_date AS date,
@@ -226,8 +244,10 @@ class ProviderDatabase:
             FROM sp_ts_price AS sp
             JOIN i_quote as iq
 	            ON iq.id = sp.quote_id
-            WHERE price_date > '{start_date}'
+            WHERE 
+                {start_date_filter}
                 {end_date_filter}
+                {security_filter}
         """
         data = self.get_data_query(query, 'get_prices_data')
         return data

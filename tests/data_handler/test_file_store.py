@@ -21,7 +21,8 @@ def get_default_files_store():
     files_settings = {
         'data_one': default_settings.copy(),
         'data_two': default_settings.copy(),
-        'data_three': {
+        'data_three': default_settings.copy(),
+        'data_four': {
             'read': {
                 'personalized_method': 'read_from_formula',
             },
@@ -29,6 +30,7 @@ def get_default_files_store():
                 'formula': "(`data_one` * `data_two`).rolling({'index': 3}).sum()",
             }
         },
+
         'data_ffill': {
             **default_settings,
             'store': {
@@ -68,6 +70,19 @@ def get_default_files_store():
             'last_valid_dim': {
                 'dim': "index",
             }
+        },
+        'data_reindex': {
+            'store': {
+                'data_methods': ['read_from_formula', 'reindex'],
+            },
+            'read_from_formula': {
+                'formula': "`data_one`",
+            },
+            'reindex': {
+                'coords_to_reindex': ["index"],
+                'reindex_path': 'data_three',
+                'method_fill_value': 'ffill'
+            }
         }
     }
 
@@ -85,8 +100,8 @@ def get_default_files_store():
 
 class TestFileStore:
     """
-    TODO: All the tests has dependencies with others, so probably should be good idea use pytest-order to stablish
-        an order between the tests, using this we can avoid calling some test from another test
+    TODO: All the tests has dependencies with others, so probably should be good idea use pytest-order to establish
+        an order between the tests, using this we can avoid calling some test from another tests
     """
 
     arr = xarray.DataArray(
@@ -112,6 +127,18 @@ class TestFileStore:
         dims=['index', 'columns'],
         coords={'index': [0, 1, 2, 3, 4], 'columns': [0, 1, 2, 3, 4]},
     )
+    arr3 = xarray.DataArray(
+        data=np.array([
+            [1, 2, 7, 4, 5],
+            [2, 6, 5, 5, 6],
+            [3, 3, 11, 5, 6],
+            [4, 3, 10, 5, 6],
+            [5, 7, 8, 5, 6],
+            [5, 7, 8, 5, 6],
+        ], dtype=float),
+        dims=['index', 'columns'],
+        coords={'index': [0, 1, 2, 3, 4, 5], 'columns': [0, 1, 2, 3, 4]},
+    )
 
     def test_store(self):
         files_store = get_default_files_store()
@@ -120,6 +147,9 @@ class TestFileStore:
 
         files_store.store(new_data=TestFileStore.arr2, path='data_two')
         assert files_store.read(path='data_two').equals(TestFileStore.arr2)
+
+        files_store.store(new_data=TestFileStore.arr3, path='data_three')
+        assert files_store.read(path='data_three').equals(TestFileStore.arr3)
 
     def test_update(self):
         self.test_store()
@@ -166,10 +196,10 @@ class TestFileStore:
     def test_read_from_formula(self):
         self.test_store()
         files_store = get_default_files_store()
-        data_three = files_store.read(path='data_three')
+        data_four = files_store.read(path='data_four')
         data_one = files_store.read(path='data_one')
         data_two = files_store.read(path='data_two')
-        assert data_three.equals((data_one * data_two).rolling({'index': 3}).sum())
+        assert data_four.equals((data_one * data_two).rolling({'index': 3}).sum())
 
     def test_ffill(self):
         self.test_store()
@@ -192,6 +222,13 @@ class TestFileStore:
         data_ffill.loc[[3, 4], 0] = np.nan
         assert files_store.read(path='data_replace_last_valid_dim').equals(data_ffill)
 
+    def test_reindex(self):
+        self.test_store()
+        files_store = get_default_files_store()
+        files_store.store(path='data_reindex')
+        data_reindex = files_store.read(path='data_reindex')
+        assert data_reindex.sel(index=5, drop=True).equals(data_reindex.sel(index=4, drop=True))
+
 
 if __name__ == "__main__":
     test = TestFileStore()
@@ -201,7 +238,8 @@ if __name__ == "__main__":
     # test.test_backup()
     # test.test_read_from_formula()
     # test.test_ffill()
-    test.test_replace_last_valid_dim()
+    # test.test_replace_last_valid_dim()
     # test.test_last_valid_index()
+    test.test_reindex()
 
 

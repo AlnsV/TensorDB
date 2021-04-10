@@ -20,6 +20,50 @@ def get_default_file_db():
                 'data_methods': ['concat_start_date', 'get_prices_data'],
             }
         },
+        'Prices Last Valid': {
+            'read': {
+                'personalized_method': 'read_from_formula',
+            },
+            'read_from_formula': {
+                'formula': '`Prices`.notnull().cumsum("date").idxmax("date")',
+            }
+        },
+        'Total Shares Outstanding Time Series': {
+            'handler': {
+                'dims': ['date', 'security_id'],
+                'bucket_name': 'test.bitacore.data.2.0',
+            },
+            'store': {
+                'data_methods': ['get_generic_from_to_data', 'reindex', 'ffill', 'replace_last_valid_dim'],
+            },
+            'append': {
+                'data_methods': [
+                    'concat_start_date',
+                    'get_generic_from_to_data',
+                    'reindex',
+                    'ffill',
+                    'replace_last_valid_dim'
+                ],
+            },
+            'get_generic_from_to_data': {
+                'table_name': 'ft_shares_outstanding',
+                'value_name': 'value',
+                'from_to_name': 'from_date',
+                'to_date_name': 'to_date',
+            },
+            'reindex': {
+                'coords_to_reindex': ["date"],
+                'reindex_path': 'Prices',
+                'method_fill_value': 'ffill'
+            },
+            'ffill': {
+                'dim': 'date'
+            },
+            'replace_last_valid_dim': {
+                'replace_path': 'Prices Last Valid',
+                'dim': 'date'
+            }
+        }
     }
     return FileDB(
         base_path=TEST_DIR_FILE_DB,
@@ -34,31 +78,61 @@ def get_default_file_db():
 
 
 class TestFileDB:
+    """
+    TODO: Improve this unitary tests, basically they are integration tests.
+    """
+    def test_add_file_settings(self):
+        file_db = get_default_file_db()
+        for file_settings_id, file_settings in file_db._files_settings.items():
+            file_db.add_file_settings(
+                data_field_name=file_settings_id,
+                file_settings=file_settings
+            )
+            assert file_db.get_file_settings(file_settings_id) == file_settings
 
     def test_prices(self):
         file_db = get_default_file_db()
-        file_db.store(path='Prices', start_date=pd.Timestamp('2020-01-01'), end_date=pd.Timestamp('2020-01-02'))
-        file_db.append(path='Prices', start_date=pd.Timestamp('2020-01-02'), end_date=pd.Timestamp('2020-01-03'))
-        assert (
-            file_db.read('Prices').coords['date'] == np.array([
-                np.datetime64('2020-01-02'),
-                np.datetime64('2020-01-03')
-            ])
-        ).all()
-        assert file_db.read('Prices').sizes['security_id'] > 18000
-
-    def test_add_file_settings(self):
-        file_db = get_default_file_db()
-        file_db.add_file_settings(
-            data_field_name='Prices',
-            file_settings=file_db._files_settings['Prices']
+        file_db.store(
+            path='Prices',
+            start_date=pd.Timestamp('2019-06-01'),
+            end_date=pd.Timestamp('2019-12-01'),
+            security_id=[8589934597, 8589934617]
         )
-        assert file_db.get_file_settings('Prices') == file_db._files_settings['Prices']
+        file_db.append(
+            path='Prices',
+            end_date=pd.Timestamp('2019-12-31'),
+            security_id=[8589934597, 8589934617]
+        )
+        data = file_db.read('Prices')
+        assert data.coords['date'][0] == np.datetime64('2019-06-03')
+        assert data.coords['date'][-1] == np.datetime64('2019-12-31')
+        assert data.isnull().sum().compute().values == 10
+        assert file_db.read('Prices').sizes['security_id'] == 2
+
+    def test_from_to_data(self):
+        self.test_prices()
+        file_db = get_default_file_db()
+
+        file_db.store(
+            path='Total Shares Outstanding Time Series',
+            start_date=pd.Timestamp('2019-01-01'),
+            end_date=pd.Timestamp('2019-12-01'),
+            security_id=[8589934597, 8589934617]
+        )
+        file_db.append(
+            path='Total Shares Outstanding Time Series',
+            end_date=pd.Timestamp('2019-12-31'),
+            security_id=[8589934597, 8589934617]
+        )
+        shares = file_db.read(path='Total Shares Outstanding Time Series')
+        prices = file_db.read(path='Prices')
+        assert all(size1 == size2 for size1, size2 in zip(shares.sizes.values(), prices.sizes.values()))
 
 
 if __name__ == "__main__":
     test = TestFileDB()
     # test.test_prices()
-    test.test_add_file_settings()
+    # test.test_add_file_settings()
+    test.test_from_to_data()
 
 

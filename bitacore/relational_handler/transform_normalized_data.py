@@ -1,15 +1,16 @@
 import pandas as pd
 import xarray
-import numpy as np
+
+from loguru import logger
 
 
 def transform_normalized_data(df: pd.DataFrame) -> xarray.DataArray:
 
     if 'from_date' in df.columns and 'security_id' in df.columns:
-        return _transform_2d_normalized_from_to_to_dataset(df)
+        return _transform_2d_normalized_from_to(df)
 
     if 'date' in df.columns and 'security_id' in df.columns:
-        return _transform_2d_normalized_to_dataset(df)
+        return _transform_2d_normalized(df)
 
     if 'security_id' in df.columns and len(df.columns) == 2:
         df = df.set_index('security_id')
@@ -60,7 +61,7 @@ def transform_normalized_data(df: pd.DataFrame) -> xarray.DataArray:
     )
 
 
-def _transform_2d_normalized_to_dataset(df: pd.DataFrame):
+def _transform_2d_normalized(df: pd.DataFrame):
     df = df.pivot(index='date', columns='security_id', values='value')
     return xarray.DataArray(
         df.to_numpy(),
@@ -72,17 +73,9 @@ def _transform_2d_normalized_to_dataset(df: pd.DataFrame):
     )
 
 
-def _transform_2d_normalized_from_to_to_dataset(df: pd.DataFrame):
-    last_valid_date = df[['security_id', 'to_date']].groupby('security_id').max().iloc[:, 0]
-
+def _transform_2d_normalized_from_to(df: pd.DataFrame):
     df = df.pivot(index='from_date', columns='security_id', values='value')
     df.ffill(inplace=True)
-
-    last_valid_date.fillna(df.index[-1], inplace=True)
-    last_valid_date.iloc[:] = pd.to_datetime(last_valid_date.values)
-
-    valid_positions = np.tile(df.index, (len(df.columns), 1)).T <= last_valid_date.to_numpy()[None, :]
-    df.where(valid_positions, np.nan, inplace=True)
 
     return xarray.DataArray(
         df.to_numpy(),
