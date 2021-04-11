@@ -1,9 +1,9 @@
 from setuptools import setup
 
 setup(
-    name='FileDB',
-    version='2.0',
-    description='File system storage based in Xarray and Zarr',
+    name='TensorDB',
+    version='1.0',
+    description='Database based in a file system storage based in Xarray and Zarr',
     author='Joseph Nowak',
     author_email='josephgonowak97@gmail.com',
     license='Bita GmbH copyright',
@@ -15,7 +15,7 @@ setup(
         'Natural Language :: English',
         'Programming Language :: Python :: 3.8',
     ],
-    keywords='Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup',
+    keywords='Database Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup Delete S3',
     packages=[
         'store_core',
         'store_core.data_handler',

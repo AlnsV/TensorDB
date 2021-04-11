@@ -185,7 +185,7 @@ class FilesStore:
         if new_data is None:
             return None
         data_reindex = self.read(path=reindex_path, **kwargs)
-        if action_type == 'store' or any([size == 0 for size in new_data.sizes.values()]):
+        if action_type == 'store' or any(size == 0 for size in new_data.sizes.values()):
             coords_to_reindex = {coord: data_reindex.coords[coord] for coord in coords_to_reindex}
         else:
             coords_to_reindex = {
