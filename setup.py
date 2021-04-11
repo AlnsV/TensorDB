@@ -36,6 +36,7 @@ setup(
         'zarr',
         'fasteners',
         'botocore',
-        'pytest'
+        'pytest',
+        'psycopg2'
     ]
 )
