@@ -1,0 +1,17 @@
+Metadata-Version: 1.1
+Name: TensorDB
+Version: 1.0
+Summary: Database based in a file system storage based in Xarray and Zarr
+Home-page: UNKNOWN
+Author: Joseph Nowak
+Author-email: josephgonowak97@gmail.com
+License: Bita GmbH copyright
+Description: UNKNOWN
+Keywords: Database Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup Delete S3
+Platform: UNKNOWN
+Classifier: Development Status :: 1 - Beta
+Classifier: Intended Audience :: Developers and Economists
+Classifier: Intended Audience :: Science/Research
+Classifier: Intended Audience :: General
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 3.8

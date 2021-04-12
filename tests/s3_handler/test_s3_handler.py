@@ -1,7 +1,7 @@
 import os
 import json
 
-from store_core.s3_handler.s3_handler import S3Handler
+from backup_handlers.s3_handler import S3Handler
 from config.config_root_dir import TEST_DIR_S3
 
 

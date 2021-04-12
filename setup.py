@@ -17,13 +17,11 @@ setup(
     ],
     keywords='Database Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup Delete S3',
     packages=[
-        'store_core',
-        'store_core.data_handler',
-        'store_core.base_handler',
-        'bitacore',
-        'bitacore.file_db',
-        'bitacore.relational_handler',
-        'tests'
+        'core',
+        'backup_handlers',
+        'config',
+        'file_handlers',
+        'financial_tensor_db'
     ],
     install_requires=[
         'pandas',
@@ -36,7 +34,6 @@ setup(
         'zarr',
         'fasteners',
         'botocore',
-        'pytest',
-        'psycopg2'
+        'pytest'
     ]
 )

@@ -1,0 +1,11 @@
+pandas
+xarray
+numpy
+loguru
+dask
+boto3
+pyyaml
+zarr
+fasteners
+botocore
+pytest
