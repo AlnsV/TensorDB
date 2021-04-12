@@ -1,9 +1,9 @@
 import xarray
 import numpy as np
 
-from core import TensorDB
-from core.utils import create_dummy_array
-from file_handlers import ZarrStorage
+from tensor_db import TensorDB
+from tensor_db.core.utils import create_dummy_array
+from tensor_db.file_handlers import ZarrStorage
 from config.config_root_dir import TEST_DIR_TENSOR_DB
 
 

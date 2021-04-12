@@ -1,2 +1,0 @@
-from external_database_handlers.relational_handler.database_bitacore_handler import ProviderDatabase
-

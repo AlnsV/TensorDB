@@ -21,9 +21,7 @@ setup(
     ],
     keywords='Database Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup Delete S3',
     packages=[
-        'core',
-        'backup_handlers',
-        'file_handlers',
+        'tensor_db',
     ],
     install_requires=required
 )

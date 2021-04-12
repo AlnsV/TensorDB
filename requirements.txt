@@ -2,9 +2,8 @@ pandas
 xarray
 numpy
 loguru
-dask
+dask[complete]
 boto3
-pyyaml
 zarr
 fasteners
 botocore

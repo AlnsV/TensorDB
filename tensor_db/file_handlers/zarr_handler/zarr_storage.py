@@ -8,8 +8,8 @@ import json
 from typing import Dict, List, Union
 from datetime import datetime
 
-from file_handlers import BaseStorage
-from backup_handlers import S3Handler
+from tensor_db.file_handlers import BaseStorage
+from tensor_db.backup_handlers import S3Handler
 
 
 class ZarrStorage(BaseStorage):

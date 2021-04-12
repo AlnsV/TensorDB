@@ -7,11 +7,11 @@ from numpy import nan
 from pandas import Timestamp
 from loguru import logger
 
-from file_handlers import (
+from tensor_db.file_handlers import (
     ZarrStorage,
     BaseStorage
 )
-from backup_handlers import S3Handler
+from tensor_db.backup_handlers import S3Handler
 from config.config_root_dir import ROOT_DIR
 
 
@@ -189,7 +189,7 @@ class TensorDB:
             results.update(result)
         return results['new_data']
 
-    def read_from_formula(self, file_settings, **kwargs):
+    def read_from_formula(self, file_settings, new_data: xarray.DataArray = None, **kwargs):
         formula = file_settings['read_from_formula']['formula']
         data_fields = {}
         data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']

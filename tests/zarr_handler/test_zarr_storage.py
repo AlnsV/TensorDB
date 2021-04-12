@@ -3,8 +3,8 @@ import numpy as np
 import os
 import shutil
 
-from file_handlers import ZarrStorage
-from core.utils import compare_dataset
+from tensor_db.file_handlers import ZarrStorage
+from tensor_db.core.utils import compare_dataset
 from config.config_root_dir import TEST_DIR_ZARR
 
 

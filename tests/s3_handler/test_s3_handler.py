@@ -1,7 +1,7 @@
 import os
 import json
 
-from backup_handlers.s3_handler import S3Handler
+from tensor_db.backup_handlers import S3Handler
 from config.config_root_dir import TEST_DIR_S3
 
 
