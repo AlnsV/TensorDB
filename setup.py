@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 
 with open('requirements.txt') as f:
@@ -20,10 +20,6 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     keywords='Database Files Xarray Handler Zarr Store Read Write Append Update Upsert Backup Delete S3',
-    packages=[
-        'tensor_db',
-        'tensor_db.file_handlers',
-        'tensor_db.backup_handlers'
-    ],
+    packages=find_packages(),
     install_requires=required
 )
