@@ -1,9 +1,13 @@
 from setuptools import setup
 
+
+with open('requirements.txt') as f:
+    required = f.read().splitlines()
+
 setup(
     name='TensorDB',
     version='1.0',
-    description='Database based in a file system storage based in Xarray and Zarr',
+    description='Database based in a file system storage combined with Xarray and Zarr',
     author='Joseph Nowak',
     author_email='josephgonowak97@gmail.com',
     license='Bita GmbH copyright',
@@ -19,21 +23,7 @@ setup(
     packages=[
         'core',
         'backup_handlers',
-        'config',
         'file_handlers',
-        'financial_tensor_db'
     ],
-    install_requires=[
-        'pandas',
-        'xarray',
-        'numpy',
-        'loguru',
-        'dask',
-        'boto3',
-        'pyyaml',
-        'zarr',
-        'fasteners',
-        'botocore',
-        'pytest'
-    ]
+    install_requires=required
 )
