@@ -4,7 +4,7 @@ import numpy as np
 from tensor_db import TensorDB
 from tensor_db.core.utils import create_dummy_array
 from tensor_db.file_handlers import ZarrStorage
-from config.config_root_dir import TEST_DIR_TENSOR_DB
+from tensor_db.config.config_root_dir import TEST_DIR_TENSOR_DB
 
 
 def get_default_tensor_db():
@@ -16,7 +16,7 @@ def get_default_tensor_db():
         },
     }
 
-    files_settings = {
+    tensors_settings = {
         'data_one': default_settings.copy(),
         'data_two': default_settings.copy(),
         'data_three': default_settings.copy(),
@@ -97,7 +97,7 @@ def get_default_tensor_db():
 
     return TensorDB(
         base_path=TEST_DIR_TENSOR_DB,
-        files_settings=files_settings,
+        tensors_settings=tensors_settings,
         use_env=False,
         s3_handler={
             'aws_access_key_id': "AKIAV5EJ3JJSZ5JQTD3K",

@@ -5,7 +5,7 @@ import shutil
 
 from tensor_db.file_handlers import ZarrStorage
 from tensor_db.core.utils import compare_dataset
-from config.config_root_dir import TEST_DIR_ZARR
+from tensor_db.config.config_root_dir import TEST_DIR_ZARR
 
 
 def get_default_zarr_storage():
