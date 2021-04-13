@@ -12,7 +12,7 @@ from tensor_db.file_handlers import (
     BaseStorage
 )
 from tensor_db.backup_handlers import S3Handler
-from config.config_root_dir import ROOT_DIR
+from tensor_db.config.config_root_dir import ROOT_DIR
 
 
 class TensorDB:
@@ -41,14 +41,15 @@ class TensorDB:
         3) Add other backup methods, currently the class only work with S3Handler
         4) Enable the max_files_on_disk option, this will allow to establish a maximum number of files that can be
             save in memory
-        5) The files settings must be saved on disk and after that a backup is necessary, probably one solution
+        5) The tensors settings must be saved on disk and after that a backup is necessary, probably one solution
             for this is create a ZarrStorage for saving all the files settings (this has a lot of limitation due to
             the zarr way to save strings which is basically an array of fixed size) or simple use a json and make a
             manual backup and allow check the last modified date from S3 (create an extra class for this would be ideal)
+            or simple use the attrs of Zarr and ZarrStorage
     """
 
     def __init__(self,
-                 files_settings: Dict[str, Dict[str, Any]],
+                 tensors_settings: Dict[str, Dict[str, Any]],
                  base_path: str = None,
                  use_env: bool = False,
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
@@ -58,7 +59,7 @@ class TensorDB:
         self.env_mode = os.getenv("ENV_MODE") if use_env else ""
         self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
         self.base_path = os.path.join(self.base_path, self.env_mode)
-        self._files_settings = files_settings
+        self._tensors_settings = tensors_settings
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
         self.max_files_on_disk = max_files_on_disk
 
@@ -72,22 +73,22 @@ class TensorDB:
 
         self.__dict__.update(**kwargs)
 
-    def add_file_setting(self, file_settings_id, file_settings):
-        self._files_settings[file_settings_id] = file_settings
+    def add_tensor_settings(self, tensor_settings_id, tensor_settings):
+        self._tensors_settings[tensor_settings_id] = tensor_settings
 
-    def get_file_settings(self, path) -> Dict:
-        file_settings_id = os.path.basename(os.path.normpath(path))
-        return self._files_settings[file_settings_id]
+    def get_tensor_settings(self, path) -> Dict:
+        tensor_settings_id = os.path.basename(os.path.normpath(path))
+        return self._tensors_settings[tensor_settings_id]
 
-    def _get_handler(self, path: Union[str, List], file_settings: Dict = None) -> BaseStorage:
-        handler_settings = self.get_file_settings(path) if file_settings is None else file_settings
+    def _get_handler(self, path: Union[str, List], tensor_settings: Dict = None) -> BaseStorage:
+        handler_settings = self.get_tensor_settings(path) if tensor_settings is None else tensor_settings
         handler_settings = handler_settings.get('handler', {})
-        local_path = self._complete_path(file_setting=handler_settings, path=path)
+        local_path = self._complete_path(tensor_settings=handler_settings, path=path)
         if local_path not in self.open_base_store:
             self.open_base_store[local_path] = {
                 'data_handler': handler_settings.get('data_handler', ZarrStorage)(
                     base_path=self.base_path,
-                    path=self._complete_path(file_setting=handler_settings, path=path, omit_base_path=True),
+                    path=self._complete_path(tensor_settings=handler_settings, path=path, omit_base_path=True),
                     s3_handler=self.s3_handler,
                     **handler_settings
                 ),
@@ -97,32 +98,15 @@ class TensorDB:
         self.open_base_store[local_path]['num_use'] += 1
         return self.open_base_store[local_path]['data_handler']
 
-    def _personalize_method(func):
-        def wrap(self, path: str, **kwargs):
-            file_settings = self.get_file_settings(path)
-            kwargs.update({
-                'action_type': func.__name__,
-                'handler': self._get_handler(path=path, file_settings=file_settings),
-                'file_settings': file_settings
-            })
-            method_settings = file_settings.get(kwargs['action_type'], {})
-            if 'personalized_method' in method_settings:
-                return getattr(self, method_settings['personalized_method'])(**kwargs)
-            if 'data_methods' in method_settings:
-                kwargs['new_data'] = self._apply_data_methods(data_methods=method_settings['data_methods'], **kwargs)
-            return func(self, **{**kwargs, **method_settings})
-
-        return wrap
-
     def _personalize_handler_action(self, path: str, action_type: str, **kwargs):
-        file_settings = self.get_file_settings(path)
+        tensor_settings = self.get_tensor_settings(path)
         kwargs.update({
             'action_type': action_type,
-            'handler': self._get_handler(path=path, file_settings=file_settings),
-            'file_settings': file_settings
+            'handler': self._get_handler(path=path, tensor_settings=tensor_settings),
+            'tensor_settings': tensor_settings
         })
 
-        method_settings = file_settings.get(kwargs['action_type'], {})
+        method_settings = tensor_settings.get(kwargs['action_type'], {})
         if 'personalized_method' in method_settings:
             method = method_settings['personalized_method']
             if method in ['store', 'update', 'append', 'upsert', 'delete', 'backup', 'update_from_backup', 'close']:
@@ -169,28 +153,28 @@ class TensorDB:
         )
 
     def _complete_path(self,
-                       file_setting: Dict,
+                       tensor_settings: Dict,
                        path: Union[List[str], str],
                        omit_base_path: bool = False):
 
         path = path if isinstance(path, list) else [path]
         if not omit_base_path:
-            return os.path.join(self.base_path, file_setting.get('extra_path', ''), *path)
-        return os.path.join(file_setting.get('extra_path', ''), *path)
+            return os.path.join(self.base_path, tensor_settings.get('extra_path', ''), *path)
+        return os.path.join(tensor_settings.get('extra_path', ''), *path)
 
-    def _apply_data_methods(self, data_methods: List[str], file_settings: Dict, **kwargs):
+    def _apply_data_methods(self, data_methods: List[str], tensor_settings: Dict, **kwargs):
         results = {**{'new_data': None}, **kwargs}
         for method in data_methods:
             result = getattr(self, method)(
-                **{**file_settings.get(method, {}), **results},
-                file_settings=file_settings
+                **{**tensor_settings.get(method, {}), **results},
+                tensor_settings=tensor_settings
             )
             result = result if isinstance(result, dict) else {'new_data': result}
             results.update(result)
         return results['new_data']
 
-    def read_from_formula(self, file_settings, new_data: xarray.DataArray = None, **kwargs):
-        formula = file_settings['read_from_formula']['formula']
+    def read_from_formula(self, tensor_settings, new_data: xarray.DataArray = None, **kwargs):
+        formula = tensor_settings['read_from_formula']['formula']
         data_fields = {}
         data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
         for i in range(0, len(data_fields_intervals), 2):
