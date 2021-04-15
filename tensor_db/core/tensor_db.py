@@ -12,7 +12,6 @@ from tensor_db.file_handlers import (
     BaseStorage
 )
 from tensor_db.backup_handlers import S3Handler
-from tensor_db.config.config_root_dir import ROOT_DIR
 
 
 class TensorDB:
@@ -49,17 +48,16 @@ class TensorDB:
     """
 
     def __init__(self,
-                 tensors_settings: Dict[str, Dict[str, Any]],
-                 base_path: str = None,
+                 tensors_definition: Dict[str, Dict[str, Any]],
+                 base_path: str,
                  use_env: bool = False,
                  s3_settings: Union[Dict[str, str], S3Handler] = None,
                  max_files_on_disk: int = 0,
                  **kwargs):
 
         self.env_mode = os.getenv("ENV_MODE") if use_env else ""
-        self.base_path = os.path.join(ROOT_DIR, 'file_db') if base_path is None else base_path
-        self.base_path = os.path.join(self.base_path, self.env_mode)
-        self._tensors_settings = tensors_settings
+        self.base_path = os.path.join(base_path, 'tensors_files_storage', self.env_mode)
+        self._tensors_definition = tensors_definition
         self.open_base_store: Dict[str, Dict[str, Any]] = {}
         self.max_files_on_disk = max_files_on_disk
 
@@ -73,22 +71,22 @@ class TensorDB:
 
         self.__dict__.update(**kwargs)
 
-    def add_tensor_settings(self, tensor_settings_id, tensor_settings):
-        self._tensors_settings[tensor_settings_id] = tensor_settings
+    def add_tensor_definition(self, tensor_definition_id, tensor_definition):
+        self._tensors_definition[tensor_definition_id] = tensor_definition
 
-    def get_tensor_settings(self, path) -> Dict:
-        tensor_settings_id = os.path.basename(os.path.normpath(path))
-        return self._tensors_settings[tensor_settings_id]
+    def get_tensor_definition(self, path) -> Dict:
+        tensor_definition_id = os.path.basename(os.path.normpath(path))
+        return self._tensors_definition[tensor_definition_id]
 
-    def _get_handler(self, path: Union[str, List], tensor_settings: Dict = None) -> BaseStorage:
-        handler_settings = self.get_tensor_settings(path) if tensor_settings is None else tensor_settings
+    def _get_handler(self, path: Union[str, List], tensor_definition: Dict = None) -> BaseStorage:
+        handler_settings = self.get_tensor_definition(path) if tensor_definition is None else tensor_definition
         handler_settings = handler_settings.get('handler', {})
-        local_path = self._complete_path(tensor_settings=handler_settings, path=path)
+        local_path = self._complete_path(tensor_definition=handler_settings, path=path)
         if local_path not in self.open_base_store:
             self.open_base_store[local_path] = {
                 'data_handler': handler_settings.get('data_handler', ZarrStorage)(
                     base_path=self.base_path,
-                    path=self._complete_path(tensor_settings=handler_settings, path=path, omit_base_path=True),
+                    path=self._complete_path(tensor_definition=handler_settings, path=path, omit_base_path=True),
                     s3_handler=self.s3_handler,
                     **handler_settings
                 ),
@@ -99,14 +97,14 @@ class TensorDB:
         return self.open_base_store[local_path]['data_handler']
 
     def _personalize_handler_action(self, path: str, action_type: str, **kwargs):
-        tensor_settings = self.get_tensor_settings(path)
+        tensor_definition = self.get_tensor_definition(path)
         kwargs.update({
             'action_type': action_type,
-            'handler': self._get_handler(path=path, tensor_settings=tensor_settings),
-            'tensor_settings': tensor_settings
+            'handler': self._get_handler(path=path, tensor_definition=tensor_definition),
+            'tensor_definition': tensor_definition
         })
 
-        method_settings = tensor_settings.get(kwargs['action_type'], {})
+        method_settings = tensor_definition.get(kwargs['action_type'], {})
         if 'personalized_method' in method_settings:
             method = method_settings['personalized_method']
             if method in ['store', 'update', 'append', 'upsert', 'delete', 'backup', 'update_from_backup', 'close']:
@@ -153,28 +151,28 @@ class TensorDB:
         )
 
     def _complete_path(self,
-                       tensor_settings: Dict,
+                       tensor_definition: Dict,
                        path: Union[List[str], str],
                        omit_base_path: bool = False):
 
         path = path if isinstance(path, list) else [path]
         if not omit_base_path:
-            return os.path.join(self.base_path, tensor_settings.get('extra_path', ''), *path)
-        return os.path.join(tensor_settings.get('extra_path', ''), *path)
+            return os.path.join(self.base_path, tensor_definition.get('extra_path', ''), *path)
+        return os.path.join(tensor_definition.get('extra_path', ''), *path)
 
-    def _apply_data_methods(self, data_methods: List[str], tensor_settings: Dict, **kwargs):
+    def _apply_data_methods(self, data_methods: List[str], tensor_definition: Dict, **kwargs):
         results = {**{'new_data': None}, **kwargs}
         for method in data_methods:
             result = getattr(self, method)(
-                **{**tensor_settings.get(method, {}), **results},
-                tensor_settings=tensor_settings
+                **{**tensor_definition.get(method, {}), **results},
+                tensor_definition=tensor_definition
             )
             result = result if isinstance(result, dict) else {'new_data': result}
             results.update(result)
         return results['new_data']
 
-    def read_from_formula(self, tensor_settings, new_data: xarray.DataArray = None, **kwargs):
-        formula = tensor_settings['read_from_formula']['formula']
+    def read_from_formula(self, tensor_definition, new_data: xarray.DataArray = None, **kwargs):
+        formula = tensor_definition['read_from_formula']['formula']
         data_fields = {}
         data_fields_intervals = [i for i, c in enumerate(formula) if c == '`']
         for i in range(0, len(data_fields_intervals), 2):

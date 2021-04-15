@@ -260,6 +260,7 @@ class ZarrStorage(BaseStorage):
 
         if backup_date == backup_date_s3:
             return "equal"
+        return "not equal"
 
     def update_from_backup(self,
                            force_update_from_backup: bool = False,

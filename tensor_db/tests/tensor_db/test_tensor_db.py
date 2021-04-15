@@ -16,7 +16,7 @@ def get_default_tensor_db():
         },
     }
 
-    tensors_settings = {
+    tensors_definition = {
         'data_one': default_settings.copy(),
         'data_two': default_settings.copy(),
         'data_three': default_settings.copy(),
@@ -97,7 +97,7 @@ def get_default_tensor_db():
 
     return TensorDB(
         base_path=TEST_DIR_TENSOR_DB,
-        tensors_settings=tensors_settings,
+        tensors_definition=tensors_definition,
         use_env=False,
         s3_handler={
             'aws_access_key_id': "AKIAV5EJ3JJSZ5JQTD3K",
@@ -175,7 +175,6 @@ class TestTensorDB:
             index=(
                 ~arr.coords['index'].isin(
                     tensor_db.read(
-                        file_setting_id='data_one',
                         path='data_one'
                     ).coords['index']
                 )

@@ -16,12 +16,13 @@ def get_default_s3_handler():
 class TestS3Handler:
     data = {'test': 'test'}
 
+    def _write_json(self):
+        with open(os.path.join(TEST_DIR_S3, 'test.json'), mode='w') as json_file:
+            json.dump(self.data, json_file)
+
     def test_upload_file(self):
         s3_handler = get_default_s3_handler()
-
-        with open(os.path.join(TEST_DIR_S3, 'test.json'), mode='w') as json_file:
-            json.dump(TestS3Handler.data, json_file)
-
+        self._write_json()
         s3_handler.upload_file(
             bucket_name='test.bitacore.data.2.0',
             local_path=os.path.join(TEST_DIR_S3, 'test.json'),
